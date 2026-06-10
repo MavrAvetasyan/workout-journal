@@ -1,0 +1,4 @@
+bin/
+obj/
+tools/*.log
+tools/cloudflared.exe
