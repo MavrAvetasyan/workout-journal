@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Журнал тренировок</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-glow page-glow-left"></div>
+  <div class="page-glow page-glow-right"></div>
+
+  <div class="app-shell">
+    <header class="hero-card">
+      <div class="hero-topline">
+        <p class="eyebrow">Workout Log</p>
+        <span class="hero-badge">Локально в браузере</span>
+      </div>
+
+      <h1>История тренировок, которую легко вести с телефона</h1>
+      <p class="hero-copy">
+        Добавляй тренировки за минуту, держи все записи под рукой и не теряй прогресс среди заметок.
+      </p>
+
+      <div class="hero-actions">
+        <button id="start-workout-button" class="primary-button" type="button">Добавить тренировку</button>
+        <button id="reset-button" class="ghost-button" type="button">Очистить форму</button>
+      </div>
+    </header>
+
+    <main class="content-grid">
+      <section class="panel panel-form">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Новая запись</p>
+            <h2 id="form-title">Тренировка</h2>
+          </div>
+          <div class="mini-chip">MVP</div>
+        </div>
+
+        <form id="workout-form" class="workout-form">
+          <input id="workout-id" type="hidden">
+
+          <label class="field">
+            <span>Тип тренировки</span>
+            <select id="workout-type" required>
+              <option value="strength">Силовая</option>
+              <option value="cardio">Кардио</option>
+            </select>
+          </label>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Время начала</span>
+              <input id="start-time" type="datetime-local" required>
+            </label>
+
+            <label class="field">
+              <span>Время окончания</span>
+              <input id="end-time" type="datetime-local" required>
+            </label>
+          </div>
+
+          <section class="exercise-section">
+            <div class="section-row">
+              <div>
+                <p class="section-kicker">Упражнения</p>
+                <h3>Что делал на тренировке</h3>
+              </div>
+              <button id="add-exercise-button" class="secondary-button" type="button">+ Упражнение</button>
+            </div>
+
+            <div id="exercises-list" class="exercise-list"></div>
+          </section>
+
+          <label class="field">
+            <span>Заметка</span>
+            <textarea id="workout-note" rows="4" placeholder="Самочувствие, комментарии, что улучшить в следующий раз"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="primary-button primary-button-wide" type="submit">Сохранить тренировку</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel panel-history">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">История</p>
+            <h2>Последние тренировки</h2>
+          </div>
+          <span id="history-count" class="history-count">0 записей</span>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          <div class="empty-state-icon">+</div>
+          <h3>Пока пусто</h3>
+          <p>Первая тренировка появится здесь. После этого историю можно будет редактировать и удалять.</p>
+        </div>
+
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <template id="exercise-template">
+    <article class="exercise-card">
+      <div class="exercise-card-header">
+        <div>
+          <p class="exercise-index-label">Упражнение</p>
+          <h4 class="exercise-card-title">Новый блок</h4>
+        </div>
+        <button class="icon-button remove-exercise-button" type="button" aria-label="Удалить упражнение">Удалить</button>
+      </div>
+
+      <label class="field">
+        <span>Название</span>
+        <input class="exercise-name" type="text" placeholder="Например, жим лежа" required>
+      </label>
+
+      <div class="triple-grid">
+        <label class="field">
+          <span>Подходы</span>
+          <input class="exercise-sets" type="number" min="1" step="1" placeholder="4" required>
+        </label>
+
+        <label class="field">
+          <span>Вес, кг</span>
+          <input class="exercise-weight" type="number" min="0" step="0.5" placeholder="60">
+        </label>
+
+        <label class="field">
+          <span>Повторы</span>
+          <input class="exercise-reps" type="number" min="0" step="1" placeholder="10">
+        </label>
+      </div>
+    </article>
+  </template>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
