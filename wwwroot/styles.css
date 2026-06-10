@@ -191,6 +191,17 @@ button {
   font-weight: 800;
 }
 
+.draft-status {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(22, 160, 133, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(22, 160, 133, 0.08);
+  color: #116a58;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .workout-form,
 .exercise-section,
 .exercise-list,

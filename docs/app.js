@@ -1,4 +1,5 @@
 const storageKey = "training-journal-workouts-v1";
+const draftStorageKey = "training-journal-draft-v1";
 
 const form = document.querySelector("#workout-form");
 const formTitle = document.querySelector("#form-title");
@@ -15,6 +16,7 @@ const historyCount = document.querySelector("#history-count");
 const addExerciseButton = document.querySelector("#add-exercise-button");
 const resetButton = document.querySelector("#reset-button");
 const startWorkoutButton = document.querySelector("#start-workout-button");
+const draftStatus = document.querySelector("#draft-status");
 
 function loadWorkouts() {
   try {
@@ -27,6 +29,34 @@ function loadWorkouts() {
 
 function saveWorkouts(workouts) {
   localStorage.setItem(storageKey, JSON.stringify(workouts));
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(draftStorageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft) {
+  localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+}
+
+function clearDraft() {
+  localStorage.removeItem(draftStorageKey);
+}
+
+function setDraftStatus(message = "") {
+  if (!message) {
+    draftStatus.hidden = true;
+    draftStatus.textContent = "";
+    return;
+  }
+
+  draftStatus.hidden = false;
+  draftStatus.textContent = message;
 }
 
 function uid() {
@@ -69,38 +99,50 @@ function createExerciseCard(exercise = {}) {
   const fragment = exerciseTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".exercise-card");
   const nameInput = card.querySelector(".exercise-name");
+  const setsInput = card.querySelector(".exercise-sets");
+  const weightInput = card.querySelector(".exercise-weight");
+  const repsInput = card.querySelector(".exercise-reps");
 
   nameInput.value = exercise.name ?? "";
-  card.querySelector(".exercise-sets").value = exercise.sets ?? "";
-  card.querySelector(".exercise-weight").value = exercise.weight ?? "";
-  card.querySelector(".exercise-reps").value = exercise.reps ?? "";
+  setsInput.value = exercise.sets ?? "";
+  weightInput.value = exercise.weight ?? "";
+  repsInput.value = exercise.reps ?? "";
 
   card.querySelector(".remove-exercise-button").addEventListener("click", () => {
     card.remove();
 
     if (!exercisesList.children.length) {
       addExerciseCard();
-      return;
+    } else {
+      refreshExerciseTitles();
     }
 
-    refreshExerciseTitles();
+    persistDraft();
   });
 
-  nameInput.addEventListener("input", refreshExerciseTitles);
+  [nameInput, setsInput, weightInput, repsInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      refreshExerciseTitles();
+      persistDraft();
+    });
+  });
 
   exercisesList.append(card);
   refreshExerciseTitles();
 }
 
-function addExerciseCard() {
-  createExerciseCard();
+function addExerciseCard(exercise = {}) {
+  createExerciseCard(exercise);
+  persistDraft();
 }
 
 function getExerciseValues() {
   return [...exercisesList.querySelectorAll(".exercise-card")]
     .map((card) => ({
       name: card.querySelector(".exercise-name").value.trim(),
-      sets: Number(card.querySelector(".exercise-sets").value),
+      sets: card.querySelector(".exercise-sets").value === ""
+        ? null
+        : Number(card.querySelector(".exercise-sets").value),
       weight: card.querySelector(".exercise-weight").value === ""
         ? null
         : Number(card.querySelector(".exercise-weight").value),
@@ -108,20 +150,91 @@ function getExerciseValues() {
         ? null
         : Number(card.querySelector(".exercise-reps").value),
     }))
-    .filter((exercise) => exercise.name);
+    .filter((exercise) => exercise.name || exercise.sets !== null || exercise.weight !== null || exercise.reps !== null);
 }
 
-function resetForm() {
-  form.reset();
-  workoutIdInput.value = "";
-  formTitle.textContent = "Тренировка";
-  exercisesList.innerHTML = "";
-  addExerciseCard();
+function buildDraftFromForm() {
+  return {
+    id: workoutIdInput.value || "",
+    type: workoutTypeInput.value,
+    startTime: startTimeInput.value,
+    endTime: endTimeInput.value,
+    note: workoutNoteInput.value.trim(),
+    exercises: getExerciseValues(),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
+function isDraftMeaningful(draft) {
+  return Boolean(
+    draft.id ||
+    draft.note ||
+    draft.type !== "strength" ||
+    draft.exercises.length ||
+    draft.startTime !== "" ||
+    draft.endTime !== ""
+  );
+}
+
+function persistDraft() {
+  const draft = buildDraftFromForm();
+
+  if (isDraftMeaningful(draft)) {
+    saveDraft(draft);
+  } else {
+    clearDraft();
+  }
+}
+
+function applyDefaultTimes() {
   const now = new Date();
   const start = new Date(now.getTime() - 60 * 60 * 1000);
   startTimeInput.value = toLocalInputValue(start);
   endTimeInput.value = toLocalInputValue(now);
+}
+
+function resetForm({ preserveStatus = false } = {}) {
+  form.reset();
+  workoutIdInput.value = "";
+  formTitle.textContent = "Тренировка";
+  exercisesList.innerHTML = "";
+  createExerciseCard();
+  applyDefaultTimes();
+  clearDraft();
+
+  if (!preserveStatus) {
+    setDraftStatus("");
+  }
+}
+
+function fillForm(workout) {
+  workoutIdInput.value = workout.id ?? "";
+  workoutTypeInput.value = workout.type ?? "strength";
+  startTimeInput.value = workout.startTime ?? "";
+  endTimeInput.value = workout.endTime ?? "";
+  workoutNoteInput.value = workout.note ?? "";
+  formTitle.textContent = workout.id ? "Редактирование" : "Тренировка";
+
+  exercisesList.innerHTML = "";
+
+  if (workout.exercises?.length) {
+    workout.exercises.forEach((exercise) => createExerciseCard(exercise));
+  } else {
+    createExerciseCard();
+  }
+
+  refreshExerciseTitles();
+}
+
+function restoreDraft() {
+  const draft = loadDraft();
+  if (!draft) {
+    resetForm({ preserveStatus: true });
+    return;
+  }
+
+  fillForm(draft);
+  setDraftStatus(`Черновик восстановлен автоматически: ${formatDate(draft.updatedAt)}`);
 }
 
 function escapeHtml(value) {
@@ -148,11 +261,6 @@ function pluralize(count) {
   return "записей";
 }
 
-function buildWorkoutTitle(workout) {
-  const exerciseCount = workout.exercises.length;
-  return `${workoutTypeLabel(workout.type)} · ${exerciseCount} ${pluralExercise(exerciseCount)}`;
-}
-
 function pluralExercise(count) {
   const mod10 = count % 10;
   const mod100 = count % 100;
@@ -166,6 +274,11 @@ function pluralExercise(count) {
   }
 
   return "упражнений";
+}
+
+function buildWorkoutTitle(workout) {
+  const exerciseCount = workout.exercises.length;
+  return `${workoutTypeLabel(workout.type)} · ${exerciseCount} ${pluralExercise(exerciseCount)}`;
 }
 
 function renderHistory() {
@@ -182,7 +295,7 @@ function renderHistory() {
 
     const exerciseSummary = workout.exercises.length
       ? workout.exercises.map((exercise) => {
-          const pieces = [escapeHtml(exercise.name), `${exercise.sets} п.`];
+          const pieces = [escapeHtml(exercise.name), `${exercise.sets ?? "-"} п.`];
 
           if (exercise.weight !== null) {
             pieces.push(`${exercise.weight} кг`);
@@ -214,7 +327,14 @@ function renderHistory() {
     `;
 
     card.querySelector(".edit-button").addEventListener("click", () => {
-      fillForm(workout);
+      clearDraft();
+      fillForm({
+        ...workout,
+        startTime: toLocalInputValue(new Date(workout.startTime)),
+        endTime: toLocalInputValue(new Date(workout.endTime)),
+      });
+      setDraftStatus("");
+      persistDraft();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
 
@@ -232,27 +352,18 @@ function renderHistory() {
   });
 }
 
-function fillForm(workout) {
-  workoutIdInput.value = workout.id;
-  workoutTypeInput.value = workout.type;
-  startTimeInput.value = toLocalInputValue(new Date(workout.startTime));
-  endTimeInput.value = toLocalInputValue(new Date(workout.endTime));
-  workoutNoteInput.value = workout.note ?? "";
-  formTitle.textContent = "Редактирование";
-
-  exercisesList.innerHTML = "";
-
-  if (workout.exercises.length) {
-    workout.exercises.forEach((exercise) => createExerciseCard(exercise));
-  } else {
-    addExerciseCard();
-  }
-}
-
 form.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const exercises = getExerciseValues();
+  const exercises = getExerciseValues()
+    .filter((exercise) => exercise.name)
+    .map((exercise) => ({
+      name: exercise.name,
+      sets: exercise.sets ?? 0,
+      weight: exercise.weight,
+      reps: exercise.reps,
+    }));
+
   const startTime = new Date(startTimeInput.value);
   const endTime = new Date(endTimeInput.value);
 
@@ -285,16 +396,22 @@ form.addEventListener("submit", (event) => {
   }
 
   saveWorkouts(workouts);
+  clearDraft();
   resetForm();
   renderHistory();
 });
 
-addExerciseButton.addEventListener("click", addExerciseCard);
-resetButton.addEventListener("click", resetForm);
+[workoutTypeInput, startTimeInput, endTimeInput, workoutNoteInput].forEach((input) => {
+  input.addEventListener("input", persistDraft);
+  input.addEventListener("change", persistDraft);
+});
+
+addExerciseButton.addEventListener("click", () => addExerciseCard());
+resetButton.addEventListener("click", () => resetForm());
 startWorkoutButton.addEventListener("click", () => {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   startTimeInput.focus();
 });
 
-resetForm();
+restoreDraft();
 renderHistory();
