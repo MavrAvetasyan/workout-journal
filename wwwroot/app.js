@@ -7,7 +7,6 @@ const workoutIdInput = document.querySelector("#workout-id");
 const workoutTypeInput = document.querySelector("#workout-type");
 const startTimeInput = document.querySelector("#start-time");
 const endTimeInput = document.querySelector("#end-time");
-const workoutNoteInput = document.querySelector("#workout-note");
 const exercisesList = document.querySelector("#exercises-list");
 const exerciseTemplate = document.querySelector("#exercise-template");
 const historyList = document.querySelector("#history-list");
@@ -86,159 +85,8 @@ function toLocalInputValue(date) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function refreshExerciseTitles() {
-  [...exercisesList.querySelectorAll(".exercise-card")].forEach((card, index) => {
-    card.querySelector(".exercise-index-label").textContent = `Упражнение ${index + 1}`;
-
-    const name = card.querySelector(".exercise-name").value.trim();
-    card.querySelector(".exercise-card-title").textContent = name || "Новый блок";
-  });
-}
-
-function createExerciseCard(exercise = {}) {
-  const fragment = exerciseTemplate.content.cloneNode(true);
-  const card = fragment.querySelector(".exercise-card");
-  const nameInput = card.querySelector(".exercise-name");
-  const setsInput = card.querySelector(".exercise-sets");
-  const weightInput = card.querySelector(".exercise-weight");
-  const repsInput = card.querySelector(".exercise-reps");
-
-  nameInput.value = exercise.name ?? "";
-  setsInput.value = exercise.sets ?? "";
-  weightInput.value = exercise.weight ?? "";
-  repsInput.value = exercise.reps ?? "";
-
-  card.querySelector(".remove-exercise-button").addEventListener("click", () => {
-    card.remove();
-
-    if (!exercisesList.children.length) {
-      addExerciseCard();
-    } else {
-      refreshExerciseTitles();
-    }
-
-    persistDraft();
-  });
-
-  [nameInput, setsInput, weightInput, repsInput].forEach((input) => {
-    input.addEventListener("input", () => {
-      refreshExerciseTitles();
-      persistDraft();
-    });
-  });
-
-  exercisesList.append(card);
-  refreshExerciseTitles();
-}
-
-function addExerciseCard(exercise = {}) {
-  createExerciseCard(exercise);
-  persistDraft();
-}
-
-function getExerciseValues() {
-  return [...exercisesList.querySelectorAll(".exercise-card")]
-    .map((card) => ({
-      name: card.querySelector(".exercise-name").value.trim(),
-      sets: card.querySelector(".exercise-sets").value === ""
-        ? null
-        : Number(card.querySelector(".exercise-sets").value),
-      weight: card.querySelector(".exercise-weight").value === ""
-        ? null
-        : Number(card.querySelector(".exercise-weight").value),
-      reps: card.querySelector(".exercise-reps").value === ""
-        ? null
-        : Number(card.querySelector(".exercise-reps").value),
-    }))
-    .filter((exercise) => exercise.name || exercise.sets !== null || exercise.weight !== null || exercise.reps !== null);
-}
-
-function buildDraftFromForm() {
-  return {
-    id: workoutIdInput.value || "",
-    type: workoutTypeInput.value,
-    startTime: startTimeInput.value,
-    endTime: endTimeInput.value,
-    note: workoutNoteInput.value.trim(),
-    exercises: getExerciseValues(),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function isDraftMeaningful(draft) {
-  return Boolean(
-    draft.id ||
-    draft.note ||
-    draft.type !== "strength" ||
-    draft.exercises.length ||
-    draft.startTime !== "" ||
-    draft.endTime !== ""
-  );
-}
-
-function persistDraft() {
-  const draft = buildDraftFromForm();
-
-  if (isDraftMeaningful(draft)) {
-    saveDraft(draft);
-  } else {
-    clearDraft();
-  }
-}
-
-function applyDefaultTimes() {
-  const now = new Date();
-  const start = new Date(now.getTime() - 60 * 60 * 1000);
-  startTimeInput.value = toLocalInputValue(start);
-  endTimeInput.value = toLocalInputValue(now);
-}
-
-function resetForm({ preserveStatus = false } = {}) {
-  form.reset();
-  workoutIdInput.value = "";
-  formTitle.textContent = "Тренировка";
-  exercisesList.innerHTML = "";
-  createExerciseCard();
-  applyDefaultTimes();
-  clearDraft();
-
-  if (!preserveStatus) {
-    setDraftStatus("");
-  }
-}
-
-function fillForm(workout) {
-  workoutIdInput.value = workout.id ?? "";
-  workoutTypeInput.value = workout.type ?? "strength";
-  startTimeInput.value = workout.startTime ?? "";
-  endTimeInput.value = workout.endTime ?? "";
-  workoutNoteInput.value = workout.note ?? "";
-  formTitle.textContent = workout.id ? "Редактирование" : "Тренировка";
-
-  exercisesList.innerHTML = "";
-
-  if (workout.exercises?.length) {
-    workout.exercises.forEach((exercise) => createExerciseCard(exercise));
-  } else {
-    createExerciseCard();
-  }
-
-  refreshExerciseTitles();
-}
-
-function restoreDraft() {
-  const draft = loadDraft();
-  if (!draft) {
-    resetForm({ preserveStatus: true });
-    return;
-  }
-
-  fillForm(draft);
-  setDraftStatus(`Черновик восстановлен автоматически: ${formatDate(draft.updatedAt)}`);
-}
-
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -281,8 +129,192 @@ function buildWorkoutTitle(workout) {
   return `${workoutTypeLabel(workout.type)} · ${exerciseCount} ${pluralExercise(exerciseCount)}`;
 }
 
+function normalizeExercise(exercise = {}) {
+  return {
+    name: exercise.name ?? "",
+    sets: exercise.sets ?? null,
+    weight: exercise.weight ?? null,
+    reps: exercise.reps ?? null,
+    note: exercise.note ?? "",
+  };
+}
+
+function refreshExerciseTitles() {
+  [...exercisesList.querySelectorAll(".exercise-card")].forEach((card, index) => {
+    card.querySelector(".exercise-index-label").textContent = `Упражнение ${index + 1}`;
+
+    const name = card.querySelector(".exercise-name").value.trim();
+    card.querySelector(".exercise-card-title").textContent = name || "Новый блок";
+  });
+}
+
+function persistDraft() {
+  const draft = buildDraftFromForm();
+
+  if (isDraftMeaningful(draft)) {
+    saveDraft(draft);
+  } else {
+    clearDraft();
+  }
+}
+
+function attachExerciseListeners(card) {
+  const inputs = [
+    card.querySelector(".exercise-name"),
+    card.querySelector(".exercise-sets"),
+    card.querySelector(".exercise-weight"),
+    card.querySelector(".exercise-reps"),
+    card.querySelector(".exercise-note"),
+  ];
+
+  inputs.forEach((input) => {
+    input.addEventListener("input", () => {
+      refreshExerciseTitles();
+      persistDraft();
+    });
+
+    input.addEventListener("change", persistDraft);
+  });
+
+  card.querySelector(".remove-exercise-button").addEventListener("click", () => {
+    card.remove();
+
+    if (!exercisesList.children.length) {
+      createExerciseCard();
+    }
+
+    refreshExerciseTitles();
+    persistDraft();
+  });
+}
+
+function createExerciseCard(exercise = {}) {
+  const fragment = exerciseTemplate.content.cloneNode(true);
+  const card = fragment.querySelector(".exercise-card");
+  const normalizedExercise = normalizeExercise(exercise);
+
+  card.querySelector(".exercise-name").value = normalizedExercise.name;
+  card.querySelector(".exercise-sets").value = normalizedExercise.sets ?? "";
+  card.querySelector(".exercise-weight").value = normalizedExercise.weight ?? "";
+  card.querySelector(".exercise-reps").value = normalizedExercise.reps ?? "";
+  card.querySelector(".exercise-note").value = normalizedExercise.note;
+
+  attachExerciseListeners(card);
+  exercisesList.append(card);
+  refreshExerciseTitles();
+}
+
+function addExerciseCard() {
+  createExerciseCard();
+  persistDraft();
+}
+
+function getExerciseValues() {
+  return [...exercisesList.querySelectorAll(".exercise-card")]
+    .map((card) => ({
+      name: card.querySelector(".exercise-name").value.trim(),
+      sets: card.querySelector(".exercise-sets").value === ""
+        ? null
+        : Number(card.querySelector(".exercise-sets").value),
+      weight: card.querySelector(".exercise-weight").value === ""
+        ? null
+        : Number(card.querySelector(".exercise-weight").value),
+      reps: card.querySelector(".exercise-reps").value === ""
+        ? null
+        : Number(card.querySelector(".exercise-reps").value),
+      note: card.querySelector(".exercise-note").value.trim(),
+    }))
+    .filter((exercise) =>
+      exercise.name ||
+      exercise.sets !== null ||
+      exercise.weight !== null ||
+      exercise.reps !== null ||
+      exercise.note
+    );
+}
+
+function buildDraftFromForm() {
+  return {
+    id: workoutIdInput.value || "",
+    type: workoutTypeInput.value,
+    startTime: startTimeInput.value,
+    endTime: endTimeInput.value,
+    exercises: getExerciseValues(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function isDraftMeaningful(draft) {
+  return Boolean(
+    draft.id ||
+    draft.type !== "strength" ||
+    draft.startTime ||
+    draft.endTime ||
+    draft.exercises.length
+  );
+}
+
+function applyDefaultTimes() {
+  const now = new Date();
+  const start = new Date(now.getTime() - 60 * 60 * 1000);
+  startTimeInput.value = toLocalInputValue(start);
+  endTimeInput.value = toLocalInputValue(now);
+}
+
+function resetForm({ preserveStatus = false, preserveDraft = false } = {}) {
+  form.reset();
+  workoutIdInput.value = "";
+  formTitle.textContent = "Тренировка";
+  exercisesList.innerHTML = "";
+  createExerciseCard();
+  applyDefaultTimes();
+
+  if (!preserveDraft) {
+    clearDraft();
+  }
+
+  if (!preserveStatus) {
+    setDraftStatus("");
+  }
+}
+
+function fillForm(workout) {
+  workoutIdInput.value = workout.id ?? "";
+  workoutTypeInput.value = workout.type ?? "strength";
+  startTimeInput.value = workout.startTime ?? "";
+  endTimeInput.value = workout.endTime ?? "";
+  formTitle.textContent = workout.id ? "Редактирование" : "Тренировка";
+  exercisesList.innerHTML = "";
+
+  if (workout.exercises?.length) {
+    workout.exercises.forEach((exercise) => createExerciseCard(normalizeExercise(exercise)));
+  } else {
+    createExerciseCard();
+  }
+
+  refreshExerciseTitles();
+}
+
+function restoreDraft() {
+  const draft = loadDraft();
+
+  if (!draft) {
+    resetForm({ preserveStatus: true, preserveDraft: true });
+    return;
+  }
+
+  fillForm(draft);
+  if (draft.updatedAt) {
+    setDraftStatus(`Черновик восстановлен автоматически: ${formatDate(draft.updatedAt)}`);
+  }
+}
+
 function renderHistory() {
   const workouts = loadWorkouts()
+    .map((workout) => ({
+      ...workout,
+      exercises: (workout.exercises ?? []).map((exercise) => normalizeExercise(exercise)),
+    }))
     .sort((left, right) => new Date(right.startTime) - new Date(left.startTime));
 
   historyList.innerHTML = "";
@@ -295,7 +327,7 @@ function renderHistory() {
 
     const exerciseSummary = workout.exercises.length
       ? workout.exercises.map((exercise) => {
-          const pieces = [escapeHtml(exercise.name), `${exercise.sets ?? "-"} п.`];
+          const pieces = [escapeHtml(exercise.name || "Без названия"), `${exercise.sets ?? "-"} п.`];
 
           if (exercise.weight !== null) {
             pieces.push(`${exercise.weight} кг`);
@@ -303,6 +335,10 @@ function renderHistory() {
 
           if (exercise.reps !== null) {
             pieces.push(`${exercise.reps} повт.`);
+          }
+
+          if (exercise.note) {
+            pieces.push(`заметка: ${escapeHtml(exercise.note)}`);
           }
 
           return pieces.join(" · ");
@@ -319,7 +355,6 @@ function renderHistory() {
       </div>
       <p class="history-meta">С ${formatDate(workout.startTime)} до ${formatDate(workout.endTime)}</p>
       <p class="exercise-summary">${exerciseSummary}</p>
-      ${workout.note ? `<p class="history-note">${escapeHtml(workout.note)}</p>` : ""}
       <div class="history-card-actions">
         <button class="secondary-button edit-button" type="button">Редактировать</button>
         <button class="ghost-button delete-button" type="button">Удалить</button>
@@ -362,6 +397,7 @@ form.addEventListener("submit", (event) => {
       sets: exercise.sets ?? 0,
       weight: exercise.weight,
       reps: exercise.reps,
+      note: exercise.note,
     }));
 
   const startTime = new Date(startTimeInput.value);
@@ -382,7 +418,6 @@ form.addEventListener("submit", (event) => {
     type: workoutTypeInput.value,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
-    note: workoutNoteInput.value.trim(),
     exercises,
   };
 
@@ -401,12 +436,12 @@ form.addEventListener("submit", (event) => {
   renderHistory();
 });
 
-[workoutTypeInput, startTimeInput, endTimeInput, workoutNoteInput].forEach((input) => {
+[workoutTypeInput, startTimeInput, endTimeInput].forEach((input) => {
   input.addEventListener("input", persistDraft);
   input.addEventListener("change", persistDraft);
 });
 
-addExerciseButton.addEventListener("click", () => addExerciseCard());
+addExerciseButton.addEventListener("click", addExerciseCard);
 resetButton.addEventListener("click", () => resetForm());
 startWorkoutButton.addEventListener("click", () => {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
