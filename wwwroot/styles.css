@@ -362,6 +362,14 @@ button {
   line-height: 1.55;
 }
 
+.history-summary,
+.history-title,
+.field span,
+.empty-state p,
+.info-card p {
+  overflow-wrap: anywhere;
+}
+
 .history-card-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -481,6 +489,72 @@ button {
 
   .app-shell {
     padding-bottom: 122px;
+  }
+
+  .view {
+    gap: 14px;
+  }
+
+  .view-intro h2 {
+    font-size: 1.32rem;
+    line-height: 1.15;
+  }
+
+  .content-grid,
+  .stack-form,
+  .exercise-list,
+  .history-list,
+  .subsection {
+    gap: 14px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .exercise-card,
+  .history-card,
+  .info-card,
+  .empty-state {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .exercise-card-header,
+  .history-card-actions,
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .history-card-actions .secondary-button,
+  .history-card-actions .ghost-button,
+  .exercise-card-header .icon-button,
+  .section-row .secondary-button,
+  .view-intro .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    padding: 13px 14px;
+  }
+
+  .field textarea {
+    min-height: 96px;
+  }
+
+  .history-title {
+    font-size: 0.96rem;
+    line-height: 1.22;
+  }
+
+  .history-meta,
+  .history-summary {
+    font-size: 0.88rem;
   }
 }
 

@@ -416,18 +416,30 @@ button {
 }
 
 .nav-item {
+  display: grid;
+  place-items: center;
   min-height: 52px;
   border: 0;
   border-radius: 18px;
   background: transparent;
   color: var(--muted);
   font-weight: 700;
+  padding: 8px 6px;
+  text-align: center;
 }
 
 .nav-item.is-active {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
   color: #fff;
   box-shadow: 0 14px 24px rgba(31, 111, 255, 0.18);
+}
+
+.nav-label {
+  display: block;
+  max-width: 100%;
+  line-height: 1.1;
+  font-size: 0.86rem;
+  word-break: break-word;
 }
 
 [hidden] {
@@ -447,6 +459,28 @@ button {
   .history-count,
   .pill {
     width: fit-content;
+  }
+
+  .bottom-nav {
+    width: calc(100% - 16px);
+    bottom: 8px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 20px;
+  }
+
+  .nav-item {
+    min-height: 56px;
+    border-radius: 16px;
+    padding: 6px 4px;
+  }
+
+  .nav-label {
+    font-size: 0.78rem;
+  }
+
+  .app-shell {
+    padding-bottom: 122px;
   }
 }
 
