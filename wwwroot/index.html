@@ -11,96 +11,304 @@
   <div class="page-glow page-glow-right"></div>
 
   <div class="app-shell">
-    <header class="hero-card">
-      <div class="hero-topline">
+    <header class="app-topbar">
+      <div>
         <p class="eyebrow">Workout Log</p>
-        <span class="hero-badge">Локально в браузере</span>
+        <h1>Журнал тренировок</h1>
       </div>
-
-      <h1>История тренировок, которую легко вести с телефона</h1>
-      <p class="hero-copy">
-        Добавляй тренировки за минуту, держи все записи под рукой и не теряй прогресс среди заметок.
-      </p>
-
-      <div class="hero-actions">
-        <button id="start-workout-button" class="primary-button" type="button">Добавить тренировку</button>
-        <button id="reset-button" class="ghost-button" type="button">Очистить форму</button>
-      </div>
+      <div class="topbar-badge">Локально в браузере</div>
     </header>
 
-    <main class="content-grid">
-      <section class="panel panel-form">
-        <div class="panel-heading">
+    <main class="views">
+      <section id="view-workouts" class="view is-active">
+        <div class="view-intro">
           <div>
-            <p class="section-kicker">Новая запись</p>
-            <h2 id="form-title">Тренировка</h2>
+            <p class="section-kicker">Тренировки</p>
+            <h2>История и новая запись</h2>
           </div>
-          <div class="mini-chip">MVP</div>
+          <button id="open-workout-form-button" class="primary-button" type="button">Новая тренировка</button>
         </div>
-        <p id="draft-status" class="draft-status" hidden></p>
 
-        <form id="workout-form" class="workout-form">
-          <input id="workout-id" type="hidden">
-
-          <label class="field">
-            <span>Тип тренировки</span>
-            <select id="workout-type" required>
-              <option value="strength">Силовая</option>
-              <option value="cardio">Кардио</option>
-            </select>
-          </label>
-
-          <div class="field-grid">
-            <label class="field">
-              <span>Время начала</span>
-              <input id="start-time" type="datetime-local" required>
-            </label>
-
-            <label class="field">
-              <span>Время окончания</span>
-              <input id="end-time" type="datetime-local" required>
-            </label>
-          </div>
-
-          <section class="exercise-section">
-            <div class="section-row">
+        <div class="content-grid">
+          <section class="panel panel-form">
+            <div class="panel-heading">
               <div>
-                <p class="section-kicker">Упражнения</p>
-                <h3>Что делал на тренировке</h3>
+                <p class="section-kicker">Форма</p>
+                <h3 id="workout-form-title">Тренировка</h3>
               </div>
-              <button id="add-exercise-button" class="secondary-button" type="button">+ Упражнение</button>
+              <button id="reset-workout-button" class="ghost-button" type="button">Очистить</button>
             </div>
+            <p id="workout-draft-status" class="draft-status" hidden></p>
 
-            <div id="exercises-list" class="exercise-list"></div>
+            <form id="workout-form" class="stack-form">
+              <input id="workout-id" type="hidden">
+
+              <label class="field">
+                <span>Название тренировки</span>
+                <input id="workout-title" type="text" placeholder="Например, Ноги и спина">
+              </label>
+
+              <label class="field">
+                <span>Тип тренировки</span>
+                <select id="workout-type" required>
+                  <option value="strength">Силовая</option>
+                  <option value="cardio">Кардио</option>
+                </select>
+              </label>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span>Время начала</span>
+                  <input id="workout-start-time" type="datetime-local" required>
+                </label>
+
+                <label class="field">
+                  <span>Время окончания</span>
+                  <input id="workout-end-time" type="datetime-local" required>
+                </label>
+              </div>
+
+              <section class="subsection">
+                <div class="section-row">
+                  <div>
+                    <p class="section-kicker">Упражнения</p>
+                    <h4>Что было в тренировке</h4>
+                  </div>
+                  <button id="add-workout-exercise-button" class="secondary-button" type="button">+ Упражнение</button>
+                </div>
+                <p id="exercise-picker-hint" class="helper-text" hidden></p>
+                <div id="workout-exercises-list" class="exercise-list"></div>
+              </section>
+
+              <div class="form-actions">
+                <button class="primary-button primary-button-wide" type="submit">Сохранить тренировку</button>
+              </div>
+            </form>
           </section>
 
-          <div class="form-actions">
-            <button class="primary-button primary-button-wide" type="submit">Сохранить тренировку</button>
-          </div>
-        </form>
+          <section class="panel panel-history">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Список</p>
+                <h3>Тренировки</h3>
+              </div>
+              <span id="workout-history-count" class="history-count">0 записей</span>
+            </div>
+
+            <div id="workout-empty-state" class="empty-state">
+              <div class="empty-state-icon">+</div>
+              <h4>Тренировок пока нет</h4>
+              <p>Сохрани первую тренировку, и история появится здесь.</p>
+            </div>
+
+            <div id="workout-history-list" class="history-list"></div>
+          </section>
+        </div>
       </section>
 
-      <section class="panel panel-history">
-        <div class="panel-heading">
+      <section id="view-exercises" class="view">
+        <div class="view-intro">
           <div>
-            <p class="section-kicker">История</p>
-            <h2>Последние тренировки</h2>
+            <p class="section-kicker">Упражнения</p>
+            <h2>Готовый справочник</h2>
           </div>
-          <span id="history-count" class="history-count">0 записей</span>
         </div>
 
-        <div id="empty-state" class="empty-state">
-          <div class="empty-state-icon">+</div>
-          <h3>Пока пусто</h3>
-          <p>Первая тренировка появится здесь. После этого историю можно будет редактировать и удалять.</p>
+        <div class="content-grid">
+          <section class="panel panel-form">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Форма</p>
+                <h3 id="exercise-form-title">Упражнение</h3>
+              </div>
+              <button id="reset-exercise-button" class="ghost-button" type="button">Очистить</button>
+            </div>
+            <p id="exercise-draft-status" class="draft-status" hidden></p>
+
+            <form id="exercise-form" class="stack-form">
+              <input id="exercise-id" type="hidden">
+
+              <label class="field">
+                <span>Название упражнения</span>
+                <input id="exercise-name" type="text" placeholder="Например, жим лежа" required>
+              </label>
+
+              <label class="field">
+                <span>Тип упражнения</span>
+                <select id="exercise-type" required>
+                  <option value="strength">Силовое</option>
+                  <option value="cardio">Кардио</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Описание или заметка</span>
+                <textarea id="exercise-description" rows="4" placeholder="Например, особенности техники или комментарии"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="primary-button primary-button-wide" type="submit">Сохранить упражнение</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel panel-history">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Список</p>
+                <h3>Упражнения</h3>
+              </div>
+              <span id="exercise-history-count" class="history-count">0 записей</span>
+            </div>
+
+            <div id="exercise-empty-state" class="empty-state">
+              <div class="empty-state-icon">+</div>
+              <h4>Справочник пуст</h4>
+              <p>Добавь упражнения один раз, чтобы потом просто выбирать их в тренировке.</p>
+            </div>
+
+            <div id="exercise-history-list" class="history-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-measurements" class="view">
+        <div class="view-intro">
+          <div>
+            <p class="section-kicker">Замеры</p>
+            <h2>История прогресса</h2>
+          </div>
         </div>
 
-        <div id="history-list" class="history-list"></div>
+        <div class="content-grid">
+          <section class="panel panel-form">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Форма</p>
+                <h3 id="measurement-form-title">Замер</h3>
+              </div>
+              <button id="reset-measurement-button" class="ghost-button" type="button">Очистить</button>
+            </div>
+            <p id="measurement-draft-status" class="draft-status" hidden></p>
+
+            <form id="measurement-form" class="stack-form">
+              <input id="measurement-id" type="hidden">
+
+              <label class="field">
+                <span>Название записи</span>
+                <input id="measurement-title" type="text" placeholder="Например, Утренний замер">
+              </label>
+
+              <label class="field">
+                <span>Дата замера</span>
+                <input id="measurement-date" type="date" required>
+              </label>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span>Вес, кг</span>
+                  <input id="measurement-weight" type="number" min="0" step="0.1" placeholder="78.4">
+                </label>
+                <label class="field">
+                  <span>Процент жира</span>
+                  <input id="measurement-body-fat" type="number" min="0" step="0.1" placeholder="18.2">
+                </label>
+              </div>
+
+              <div class="double-grid">
+                <label class="field">
+                  <span>Грудь</span>
+                  <input id="measurement-chest" type="number" min="0" step="0.1" placeholder="100">
+                </label>
+                <label class="field">
+                  <span>Талия</span>
+                  <input id="measurement-waist" type="number" min="0" step="0.1" placeholder="82">
+                </label>
+                <label class="field">
+                  <span>Живот</span>
+                  <input id="measurement-belly" type="number" min="0" step="0.1" placeholder="86">
+                </label>
+                <label class="field">
+                  <span>Бедра</span>
+                  <input id="measurement-hips" type="number" min="0" step="0.1" placeholder="98">
+                </label>
+                <label class="field">
+                  <span>Рука</span>
+                  <input id="measurement-arm" type="number" min="0" step="0.1" placeholder="36">
+                </label>
+                <label class="field">
+                  <span>Нога</span>
+                  <input id="measurement-leg" type="number" min="0" step="0.1" placeholder="58">
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Заметка</span>
+                <textarea id="measurement-note" rows="4" placeholder="Например, утром натощак или после тренировки"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="primary-button primary-button-wide" type="submit">Сохранить замер</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel panel-history">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Список</p>
+                <h3>Замеры</h3>
+              </div>
+              <span id="measurement-history-count" class="history-count">0 записей</span>
+            </div>
+
+            <div id="measurement-empty-state" class="empty-state">
+              <div class="empty-state-icon">+</div>
+              <h4>Замеров пока нет</h4>
+              <p>Можно сохранять только те поля, которые действительно замерили.</p>
+            </div>
+
+            <div id="measurement-history-list" class="history-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-more" class="view">
+        <div class="view-intro">
+          <div>
+            <p class="section-kicker">Еще</p>
+            <h2>О приложении</h2>
+          </div>
+        </div>
+
+        <section class="panel info-panel">
+          <article class="info-card">
+            <h3>Как сейчас хранятся данные</h3>
+            <p>Тренировки, упражнения, замеры и черновики сохраняются локально в браузере на этом устройстве.</p>
+          </article>
+
+          <article class="info-card">
+            <h3>Что уже поддерживается</h3>
+            <p>Незаполненные формы восстанавливаются после обновления страницы. Для тренировок можно выбирать упражнения из заранее созданного справочника.</p>
+          </article>
+
+          <article class="info-card">
+            <h3>Что можно добавить дальше</h3>
+            <p>Экспорт данных, графики прогресса, поиск по истории, облачную синхронизацию и аккаунты.</p>
+          </article>
+        </section>
       </section>
     </main>
   </div>
 
-  <template id="exercise-template">
+  <nav class="bottom-nav" aria-label="Основная навигация">
+    <button class="nav-item is-active" type="button" data-view="workouts">Тренировки</button>
+    <button class="nav-item" type="button" data-view="exercises">Упражнения</button>
+    <button class="nav-item" type="button" data-view="measurements">Замеры</button>
+    <button class="nav-item" type="button" data-view="more">Еще</button>
+  </nav>
+
+  <template id="workout-exercise-template">
     <article class="exercise-card">
       <div class="exercise-card-header">
         <div>
@@ -111,21 +319,19 @@
       </div>
 
       <label class="field">
-        <span>Название</span>
-        <input class="exercise-name" type="text" placeholder="Например, жим лежа" required>
+        <span>Выбрать упражнение</span>
+        <select class="workout-exercise-id" required></select>
       </label>
 
       <div class="triple-grid">
         <label class="field">
           <span>Подходы</span>
-          <input class="exercise-sets" type="number" min="1" step="1" placeholder="4" required>
+          <input class="exercise-sets" type="number" min="1" step="1" placeholder="4">
         </label>
-
         <label class="field">
           <span>Вес, кг</span>
           <input class="exercise-weight" type="number" min="0" step="0.5" placeholder="60">
         </label>
-
         <label class="field">
           <span>Повторы</span>
           <input class="exercise-reps" type="number" min="0" step="1" placeholder="10">
@@ -134,7 +340,7 @@
 
       <label class="field">
         <span>Заметка к упражнению</span>
-        <textarea class="exercise-note" rows="3" placeholder="Техника, ощущения, комментарии по этому упражнению"></textarea>
+        <textarea class="exercise-note" rows="3" placeholder="Техника, ощущения, комментарии"></textarea>
       </label>
     </article>
   </template>
