@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Журнал тренировок</title>
-  <link rel="stylesheet" href="./styles.css?v=20260611b">
+  <link rel="stylesheet" href="./styles.css?v=20260611c">
 </head>
 <body>
   <div class="page-glow page-glow-left"></div>
@@ -293,8 +293,19 @@
           </article>
 
           <article class="info-card">
-            <h3>Что можно добавить дальше</h3>
-            <p>Экспорт данных, графики прогресса, поиск по истории, облачную синхронизацию и аккаунты.</p>
+            <h3>Резервная копия</h3>
+            <p>Можно выгрузить все данные в файл и позже восстановить их через импорт. Это защитит историю от случайной потери.</p>
+          </article>
+
+          <article class="info-card">
+            <h3>Действия с данными</h3>
+            <div class="info-card-actions">
+              <button id="export-data-button" class="secondary-button" type="button">Экспорт данных</button>
+              <button id="import-data-button" class="secondary-button" type="button">Импорт данных</button>
+              <button id="clear-all-data-button" class="ghost-button" type="button">Очистить все данные</button>
+            </div>
+            <input id="import-data-input" type="file" accept="application/json" hidden>
+            <p>Экспорт сохраняет тренировки, упражнения, замеры и черновики. Очистка удаляет все локальные данные только на этом устройстве.</p>
           </article>
         </section>
       </section>
@@ -353,6 +364,8 @@
     </article>
   </template>
 
-  <script src="./app.js?v=20260611b" defer></script>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="./app.js?v=20260611c" defer></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
 const storageKeys = {
   workouts: "training-journal-workouts-v2",
-  exercises: "training-journal-exercises-v1",
+  exercises: "training-journal-exercises-v2",
   measurements: "training-journal-measurements-v1",
   workoutDraft: "training-journal-workout-draft-v2",
   exerciseDraft: "training-journal-exercise-draft-v1",
   measurementDraft: "training-journal-measurement-draft-v1",
+  lastView: "training-journal-last-view-v1",
 };
 
 const views = {
@@ -15,20 +16,7 @@ const views = {
 };
 
 const navItems = [...document.querySelectorAll(".nav-item")];
-
-function normalizeNavLabels() {
-  const useCompactLabels = window.innerWidth <= 430;
-
-  navItems.forEach((item) => {
-    const labels = [...item.querySelectorAll(".nav-label")];
-    if (labels.length <= 1) {
-      return;
-    }
-
-    const preferredLabel = useCompactLabels ? labels[labels.length - 1] : labels[0];
-    item.replaceChildren(preferredLabel.cloneNode(true));
-  });
-}
+const toast = document.querySelector("#toast");
 
 const workoutForm = document.querySelector("#workout-form");
 const workoutFormTitle = document.querySelector("#workout-form-title");
@@ -80,34 +68,112 @@ const measurementHistoryCount = document.querySelector("#measurement-history-cou
 const measurementEmptyState = document.querySelector("#measurement-empty-state");
 const resetMeasurementButton = document.querySelector("#reset-measurement-button");
 
+const exportDataButton = document.querySelector("#export-data-button");
+const importDataButton = document.querySelector("#import-data-button");
+const importDataInput = document.querySelector("#import-data-input");
+const clearAllDataButton = document.querySelector("#clear-all-data-button");
+
+let toastTimer = null;
+let pendingDelete = null;
+let suppressSaveErrors = false;
+
+function showToast(message, { duration = 3200, actionLabel = "", onAction = null } = {}) {
+  if (!toast) {
+    return;
+  }
+
+  toast.hidden = false;
+  toast.innerHTML = "";
+
+  const text = document.createElement("span");
+  text.textContent = message;
+  toast.append(text);
+
+  if (actionLabel && typeof onAction === "function") {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "toast-action";
+    action.textContent = actionLabel;
+    action.addEventListener("click", () => {
+      onAction();
+      hideToast();
+    });
+    toast.append(action);
+  }
+
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(hideToast, duration);
+}
+
+function hideToast() {
+  if (!toast) {
+    return;
+  }
+
+  toast.hidden = true;
+  toast.innerHTML = "";
+}
+
+function reportStorageError(actionLabel, error) {
+  if (suppressSaveErrors) {
+    return false;
+  }
+
+  console.error(error);
+  showToast(`Не удалось ${actionLabel}. Проверь свободное место в браузере.`);
+  return false;
+}
+
+function safeSetItem(key, value, actionLabel) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    return reportStorageError(actionLabel, error);
+  }
+}
+
+function safeRemoveItem(key, actionLabel) {
+  try {
+    localStorage.removeItem(key);
+    return true;
+  } catch (error) {
+    return reportStorageError(actionLabel, error);
+  }
+}
+
 function loadList(key) {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (error) {
+    console.error(error);
+    showToast("Не удалось прочитать часть сохраненных данных.");
     return [];
   }
 }
 
-function saveList(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+function saveList(key, value, actionLabel = "сохранить данные") {
+  return safeSetItem(key, JSON.stringify(value), actionLabel);
 }
 
 function loadObject(key) {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (error) {
+    console.error(error);
+    showToast("Не удалось прочитать часть сохраненных данных.");
     return null;
   }
 }
 
-function saveObject(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+function saveObject(key, value, actionLabel = "сохранить данные") {
+  return safeSetItem(key, JSON.stringify(value), actionLabel);
 }
 
-function clearObject(key) {
-  localStorage.removeItem(key);
+function clearObject(key, actionLabel = "очистить данные") {
+  return safeRemoveItem(key, actionLabel);
 }
 
 function uid() {
@@ -185,20 +251,38 @@ function pluralize(count, one, few, many) {
   return many;
 }
 
+function normalizeNavLabels() {
+  navItems.forEach((item) => {
+    const labels = [...item.querySelectorAll(".nav-label")];
+    if (labels.length <= 1) {
+      return;
+    }
+
+    item.replaceChildren(labels[0].cloneNode(true));
+  });
+}
+
 function getWorkouts() {
   return loadList(storageKeys.workouts);
 }
 
 function setWorkouts(items) {
-  saveList(storageKeys.workouts, items);
+  return saveList(storageKeys.workouts, items, "сохранить тренировки");
 }
 
 function getExercises() {
   return loadList(storageKeys.exercises);
 }
 
+function migrateExercises(items) {
+  return items.map((item) => ({
+    ...item,
+    archived: Boolean(item.archived),
+  }));
+}
+
 function setExercises(items) {
-  saveList(storageKeys.exercises, items);
+  return saveList(storageKeys.exercises, items, "сохранить упражнения");
 }
 
 function getMeasurements() {
@@ -206,11 +290,15 @@ function getMeasurements() {
 }
 
 function setMeasurements(items) {
-  saveList(storageKeys.measurements, items);
+  return saveList(storageKeys.measurements, items, "сохранить замеры");
 }
 
 function getExerciseById(exerciseId) {
   return getExercises().find((item) => item.id === exerciseId) ?? null;
+}
+
+function getActiveExercises() {
+  return getExercises().filter((item) => !item.archived);
 }
 
 function normalizeWorkoutExercise(item = {}) {
@@ -225,7 +313,7 @@ function normalizeWorkoutExercise(item = {}) {
 
 function renderExercisePicker(select, selectedId = "") {
   const workoutType = workoutTypeInput.value;
-  const exercises = getExercises().filter((exercise) => exercise.type === workoutType);
+  const exercises = getActiveExercises().filter((exercise) => exercise.type === workoutType);
   const placeholder = `<option value="">Выбери упражнение</option>`;
   const options = exercises
     .map((exercise) => `<option value="${exercise.id}">${escapeHtml(exercise.name)}</option>`)
@@ -247,7 +335,7 @@ function refreshWorkoutExerciseCards() {
   });
 
   const currentType = workoutTypeInput.value;
-  const availableExercises = getExercises().filter((exercise) => exercise.type === currentType);
+  const availableExercises = getActiveExercises().filter((exercise) => exercise.type === currentType);
   exercisePickerHint.hidden = availableExercises.length > 0;
   exercisePickerHint.textContent = availableExercises.length
     ? ""
@@ -290,9 +378,9 @@ function persistWorkoutDraft() {
   );
 
   if (hasMeaning) {
-    saveObject(storageKeys.workoutDraft, draft);
+    saveObject(storageKeys.workoutDraft, draft, "сохранить черновик тренировки");
   } else {
-    clearObject(storageKeys.workoutDraft);
+    clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   }
 }
 
@@ -355,7 +443,7 @@ function resetWorkoutForm({ preserveDraft = false, preserveStatus = false } = {}
   refreshWorkoutExerciseCards();
 
   if (!preserveDraft) {
-    clearObject(storageKeys.workoutDraft);
+    clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   }
 
   if (!preserveStatus) {
@@ -403,6 +491,32 @@ function workoutListTitle(workout) {
   return `${workoutTypeLabel(workout.type)} · ${formatDateOnly(workout.startTime)}`;
 }
 
+function runDeleteWithUndo(config) {
+  if (pendingDelete?.finalize) {
+    pendingDelete.finalize();
+  }
+
+  const applied = config.apply();
+  if (applied === false) {
+    return;
+  }
+
+  pendingDelete = {
+    finalize: () => {
+      pendingDelete = null;
+    },
+    restore: config.restore,
+  };
+
+  showToast(config.message, {
+    actionLabel: "Отменить",
+    onAction: () => {
+      config.restore();
+      pendingDelete = null;
+    },
+  });
+}
+
 function renderWorkoutHistory() {
   const workouts = getWorkouts().sort((left, right) => new Date(right.startTime) - new Date(left.startTime));
   workoutHistoryList.innerHTML = "";
@@ -436,11 +550,14 @@ function renderWorkoutHistory() {
     `;
 
     card.querySelector(".edit-workout-button").addEventListener("click", () => {
-      fillWorkoutForm({
-        ...workout,
-        startTime: toLocalInputValue(new Date(workout.startTime)),
-        endTime: toLocalInputValue(new Date(workout.endTime)),
-      }, { editing: true });
+      fillWorkoutForm(
+        {
+          ...workout,
+          startTime: toLocalInputValue(new Date(workout.startTime)),
+          endTime: toLocalInputValue(new Date(workout.endTime)),
+        },
+        { editing: true }
+      );
       setDraftStatus(workoutDraftStatus, "");
       persistWorkoutDraft();
       switchView("workouts");
@@ -448,12 +565,30 @@ function renderWorkoutHistory() {
     });
 
     card.querySelector(".delete-workout-button").addEventListener("click", () => {
-      const nextWorkouts = getWorkouts().filter((item) => item.id !== workout.id);
-      setWorkouts(nextWorkouts);
-      renderWorkoutHistory();
-      if (workoutIdInput.value === workout.id) {
-        resetWorkoutForm();
+      if (!window.confirm("Удалить эту тренировку?")) {
+        return;
       }
+
+      const previous = getWorkouts();
+      const next = previous.filter((item) => item.id !== workout.id);
+
+      runDeleteWithUndo({
+        message: "Тренировка удалена.",
+        apply: () => {
+          if (!setWorkouts(next)) {
+            return false;
+          }
+          renderWorkoutHistory();
+          if (workoutIdInput.value === workout.id) {
+            resetWorkoutForm();
+          }
+          return true;
+        },
+        restore: () => {
+          setWorkouts(previous);
+          renderWorkoutHistory();
+        },
+      });
     });
 
     workoutHistoryList.append(card);
@@ -474,9 +609,9 @@ function persistExerciseDraft() {
   const draft = buildExerciseDraft();
   const hasMeaning = Boolean(draft.id || draft.name || draft.type !== "strength" || draft.description);
   if (hasMeaning) {
-    saveObject(storageKeys.exerciseDraft, draft);
+    saveObject(storageKeys.exerciseDraft, draft, "сохранить черновик упражнения");
   } else {
-    clearObject(storageKeys.exerciseDraft);
+    clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
   }
 }
 
@@ -487,7 +622,7 @@ function resetExerciseForm({ preserveDraft = false, preserveStatus = false } = {
   exerciseTypeInput.value = "strength";
 
   if (!preserveDraft) {
-    clearObject(storageKeys.exerciseDraft);
+    clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
   }
 
   if (!preserveStatus) {
@@ -517,7 +652,7 @@ function restoreExerciseDraft() {
 }
 
 function renderExerciseHistory() {
-  const exercises = getExercises().sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  const exercises = getActiveExercises().sort((left, right) => left.name.localeCompare(right.name, "ru"));
   exerciseHistoryList.innerHTML = "";
   exerciseHistoryCount.textContent = `${exercises.length} ${pluralize(exercises.length, "запись", "записи", "записей")}`;
   exerciseEmptyState.hidden = exercises.length > 0;
@@ -535,7 +670,7 @@ function renderExerciseHistory() {
       <p class="history-summary">${escapeHtml(exercise.description || "Без описания")}</p>
       <div class="history-card-actions">
         <button class="secondary-button edit-exercise-button" type="button">Редактировать</button>
-        <button class="ghost-button delete-exercise-button" type="button">Удалить</button>
+        <button class="ghost-button delete-exercise-button" type="button">Скрыть</button>
       </div>
     `;
 
@@ -548,21 +683,34 @@ function renderExerciseHistory() {
     });
 
     card.querySelector(".delete-exercise-button").addEventListener("click", () => {
-      const nextExercises = getExercises().filter((item) => item.id !== exercise.id);
-      setExercises(nextExercises);
-      renderExerciseHistory();
-      refreshWorkoutExerciseCards();
-
-      const workouts = getWorkouts().map((workout) => ({
-        ...workout,
-        exercises: workout.exercises.filter((entry) => entry.exerciseId !== exercise.id),
-      }));
-      setWorkouts(workouts);
-      renderWorkoutHistory();
-
-      if (exerciseIdInput.value === exercise.id) {
-        resetExerciseForm();
+      if (!window.confirm("Скрыть упражнение из справочника? В старых тренировках оно останется.")) {
+        return;
       }
+
+      const previous = getExercises();
+      const next = previous.map((item) => (
+        item.id === exercise.id ? { ...item, archived: true } : item
+      ));
+
+      runDeleteWithUndo({
+        message: "Упражнение скрыто из справочника.",
+        apply: () => {
+          if (!setExercises(next)) {
+            return false;
+          }
+          renderExerciseHistory();
+          refreshWorkoutExerciseCards();
+          if (exerciseIdInput.value === exercise.id) {
+            resetExerciseForm();
+          }
+          return true;
+        },
+        restore: () => {
+          setExercises(previous);
+          renderExerciseHistory();
+          refreshWorkoutExerciseCards();
+        },
+      });
     });
 
     exerciseHistoryList.append(card);
@@ -605,9 +753,9 @@ function persistMeasurementDraft() {
   );
 
   if (hasMeaning) {
-    saveObject(storageKeys.measurementDraft, draft);
+    saveObject(storageKeys.measurementDraft, draft, "сохранить черновик замера");
   } else {
-    clearObject(storageKeys.measurementDraft);
+    clearObject(storageKeys.measurementDraft, "очистить черновик замера");
   }
 }
 
@@ -618,7 +766,7 @@ function resetMeasurementForm({ preserveDraft = false, preserveStatus = false } 
   measurementDateInput.value = new Date().toISOString().slice(0, 10);
 
   if (!preserveDraft) {
-    clearObject(storageKeys.measurementDraft);
+    clearObject(storageKeys.measurementDraft, "очистить черновик замера");
   }
 
   if (!preserveStatus) {
@@ -698,16 +846,43 @@ function renderMeasurementHistory() {
     });
 
     card.querySelector(".delete-measurement-button").addEventListener("click", () => {
-      const nextItems = getMeasurements().filter((entry) => entry.id !== item.id);
-      setMeasurements(nextItems);
-      renderMeasurementHistory();
-      if (measurementIdInput.value === item.id) {
-        resetMeasurementForm();
+      if (!window.confirm("Удалить этот замер?")) {
+        return;
       }
+
+      const previous = getMeasurements();
+      const next = previous.filter((entry) => entry.id !== item.id);
+
+      runDeleteWithUndo({
+        message: "Замер удален.",
+        apply: () => {
+          if (!setMeasurements(next)) {
+            return false;
+          }
+          renderMeasurementHistory();
+          if (measurementIdInput.value === item.id) {
+            resetMeasurementForm();
+          }
+          return true;
+        },
+        restore: () => {
+          setMeasurements(previous);
+          renderMeasurementHistory();
+        },
+      });
     });
 
     measurementHistoryList.append(card);
   });
+}
+
+function saveLastView(viewName) {
+  saveObject(storageKeys.lastView, viewName, "сохранить последний раздел");
+}
+
+function getLastView() {
+  const value = loadObject(storageKeys.lastView);
+  return typeof value === "string" && views[value] ? value : "workouts";
 }
 
 function switchView(viewName) {
@@ -718,6 +893,176 @@ function switchView(viewName) {
   navItems.forEach((item) => {
     item.classList.toggle("is-active", item.dataset.view === viewName);
   });
+
+  saveLastView(viewName);
+}
+
+function normalizeExerciseName(value) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU");
+}
+
+function collectAllData() {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    workouts: getWorkouts(),
+    exercises: getExercises(),
+    measurements: getMeasurements(),
+    drafts: {
+      workout: loadObject(storageKeys.workoutDraft),
+      exercise: loadObject(storageKeys.exerciseDraft),
+      measurement: loadObject(storageKeys.measurementDraft),
+    },
+  };
+}
+
+function applyImportedData(payload) {
+  const workouts = Array.isArray(payload.workouts) ? payload.workouts : [];
+  const exercises = Array.isArray(payload.exercises) ? migrateExercises(payload.exercises) : [];
+  const measurements = Array.isArray(payload.measurements) ? payload.measurements : [];
+  const drafts = payload.drafts && typeof payload.drafts === "object" ? payload.drafts : {};
+
+  suppressSaveErrors = true;
+  try {
+    const writes = [
+      saveList(storageKeys.workouts, workouts, "импортировать тренировки"),
+      saveList(storageKeys.exercises, exercises, "импортировать упражнения"),
+      saveList(storageKeys.measurements, measurements, "импортировать замеры"),
+    ];
+
+    if (drafts.workout) {
+      writes.push(saveObject(storageKeys.workoutDraft, drafts.workout, "импортировать черновик тренировки"));
+    } else {
+      writes.push(clearObject(storageKeys.workoutDraft, "очистить черновик тренировки"));
+    }
+
+    if (drafts.exercise) {
+      writes.push(saveObject(storageKeys.exerciseDraft, drafts.exercise, "импортировать черновик упражнения"));
+    } else {
+      writes.push(clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения"));
+    }
+
+    if (drafts.measurement) {
+      writes.push(saveObject(storageKeys.measurementDraft, drafts.measurement, "импортировать черновик замера"));
+    } else {
+      writes.push(clearObject(storageKeys.measurementDraft, "очистить черновик замера"));
+    }
+
+    return writes.every(Boolean);
+  } finally {
+    suppressSaveErrors = false;
+  }
+}
+
+function exportData() {
+  const payload = collectAllData();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const datePart = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `workout-journal-backup-${datePart}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast("Резервная копия выгружена.");
+}
+
+function clearAllData() {
+  if (!window.confirm("Очистить все тренировки, упражнения, замеры и черновики на этом устройстве?")) {
+    return;
+  }
+
+  const snapshot = collectAllData();
+  const keys = [
+    storageKeys.workouts,
+    storageKeys.exercises,
+    storageKeys.measurements,
+    storageKeys.workoutDraft,
+    storageKeys.exerciseDraft,
+    storageKeys.measurementDraft,
+  ];
+
+  suppressSaveErrors = true;
+  try {
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch (error) {
+    suppressSaveErrors = false;
+    reportStorageError("очистить данные", error);
+    return;
+  }
+  suppressSaveErrors = false;
+
+  resetWorkoutForm();
+  resetExerciseForm();
+  resetMeasurementForm();
+  renderExerciseHistory();
+  renderWorkoutHistory();
+  renderMeasurementHistory();
+  refreshWorkoutExerciseCards();
+
+  showToast("Все локальные данные очищены.", {
+    duration: 5000,
+    actionLabel: "Отменить",
+    onAction: () => {
+      applyImportedData(snapshot);
+      restoreWorkoutDraft();
+      restoreExerciseDraft();
+      restoreMeasurementDraft();
+      renderExerciseHistory();
+      renderWorkoutHistory();
+      renderMeasurementHistory();
+      refreshWorkoutExerciseCards();
+    },
+  });
+}
+
+function importDataFromFile(file) {
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const payload = JSON.parse(String(reader.result));
+      if (!payload || typeof payload !== "object") {
+        throw new Error("Invalid payload");
+      }
+
+      if (!window.confirm("Импорт заменит текущие локальные данные на этом устройстве. Продолжить?")) {
+        return;
+      }
+
+      const success = applyImportedData(payload);
+      if (!success) {
+        showToast("Импорт не завершен. Проверь файл и место в браузере.");
+        return;
+      }
+
+      restoreWorkoutDraft();
+      restoreExerciseDraft();
+      restoreMeasurementDraft();
+      renderExerciseHistory();
+      renderWorkoutHistory();
+      renderMeasurementHistory();
+      refreshWorkoutExerciseCards();
+      showToast("Данные успешно импортированы.");
+    } catch (error) {
+      console.error(error);
+      showToast("Не удалось импортировать файл. Проверь формат JSON.");
+    } finally {
+      importDataInput.value = "";
+    }
+  });
+
+  reader.addEventListener("error", () => {
+    showToast("Не удалось прочитать файл.");
+    importDataInput.value = "";
+  });
+
+  reader.readAsText(file);
 }
 
 navItems.forEach((item) => {
@@ -768,11 +1113,15 @@ resetExerciseButton.addEventListener("click", () => resetExerciseForm());
 resetMeasurementButton.addEventListener("click", () => resetMeasurementForm());
 addWorkoutExerciseButton.addEventListener("click", () => createWorkoutExerciseCard());
 
+exportDataButton.addEventListener("click", exportData);
+importDataButton.addEventListener("click", () => importDataInput.click());
+importDataInput.addEventListener("change", () => importDataFromFile(importDataInput.files?.[0]));
+clearAllDataButton.addEventListener("click", clearAllData);
+
 workoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
   const entries = collectWorkoutExercises().filter((entry) => entry.exerciseId);
-
   if (!entries.length) {
     alert("Добавь хотя бы одно упражнение в тренировку.");
     return;
@@ -780,11 +1129,11 @@ workoutForm.addEventListener("submit", (event) => {
 
   const invalidEntry = entries.find((entry) => {
     const exercise = getExerciseById(entry.exerciseId);
-    return !exercise || exercise.type !== workoutTypeInput.value;
+    return !exercise || exercise.type !== workoutTypeInput.value || exercise.archived;
   });
 
   if (invalidEntry) {
-    alert("В тренировке есть упражнение неподходящего типа. Проверь выбранные упражнения.");
+    alert("В тренировке есть упражнение неподходящего типа или скрытое упражнение. Проверь выбранные упражнения.");
     return;
   }
 
@@ -824,23 +1173,51 @@ workoutForm.addEventListener("submit", (event) => {
     workouts.push(workout);
   }
 
-  setWorkouts(workouts);
-  clearObject(storageKeys.workoutDraft);
+  if (!setWorkouts(workouts)) {
+    return;
+  }
+
+  clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   resetWorkoutForm();
   renderWorkoutHistory();
+  showToast("Тренировка сохранена.");
 });
 
 exerciseForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
+  const name = exerciseNameInput.value.trim();
+  const normalizedName = normalizeExerciseName(name);
+  const exercises = getExercises();
+  const duplicate = exercises.find((item) => (
+    item.id !== exerciseIdInput.value &&
+    normalizeExerciseName(item.name) === normalizedName &&
+    !item.archived
+  ));
+
+  if (duplicate) {
+    alert("Упражнение с таким названием уже есть в справочнике.");
+    return;
+  }
+
+  const archivedDuplicate = exercises.find((item) => (
+    item.id !== exerciseIdInput.value &&
+    normalizeExerciseName(item.name) === normalizedName &&
+    item.archived
+  ));
+
+  if (archivedDuplicate && !window.confirm("Такое упражнение уже было скрыто. Сохранить новое заново?")) {
+    return;
+  }
+
   const exercise = {
     id: exerciseIdInput.value || uid(),
-    name: exerciseNameInput.value.trim(),
+    name,
     type: exerciseTypeInput.value,
     description: exerciseDescriptionInput.value.trim(),
+    archived: false,
   };
 
-  const exercises = getExercises();
   const existingIndex = exercises.findIndex((item) => item.id === exercise.id);
   if (existingIndex >= 0) {
     exercises[existingIndex] = exercise;
@@ -848,11 +1225,15 @@ exerciseForm.addEventListener("submit", (event) => {
     exercises.push(exercise);
   }
 
-  setExercises(exercises);
-  clearObject(storageKeys.exerciseDraft);
+  if (!setExercises(exercises)) {
+    return;
+  }
+
+  clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
   resetExerciseForm();
   renderExerciseHistory();
   refreshWorkoutExerciseCards();
+  showToast("Упражнение сохранено.");
 });
 
 measurementForm.addEventListener("submit", (event) => {
@@ -886,12 +1267,17 @@ measurementForm.addEventListener("submit", (event) => {
     measurements.push(measurement);
   }
 
-  setMeasurements(measurements);
-  clearObject(storageKeys.measurementDraft);
+  if (!setMeasurements(measurements)) {
+    return;
+  }
+
+  clearObject(storageKeys.measurementDraft, "очистить черновик замера");
   resetMeasurementForm();
   renderMeasurementHistory();
+  showToast("Замер сохранен.");
 });
 
+setExercises(migrateExercises(getExercises()));
 restoreWorkoutDraft();
 restoreExerciseDraft();
 restoreMeasurementDraft();
@@ -900,4 +1286,4 @@ renderExerciseHistory();
 renderWorkoutHistory();
 renderMeasurementHistory();
 refreshWorkoutExerciseCards();
-switchView("workouts");
+switchView(getLastView());
