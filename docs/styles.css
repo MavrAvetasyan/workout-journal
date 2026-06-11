@@ -450,10 +450,6 @@ button {
   word-break: break-word;
 }
 
-.nav-label-short {
-  display: none;
-}
-
 [hidden] {
   display: none !important;
 }
@@ -636,14 +632,6 @@ button {
     min-height: 50px;
     border-radius: 14px;
     padding: 4px 2px;
-  }
-
-  .nav-label-full {
-    display: none;
-  }
-
-  .nav-label-short {
-    display: block;
   }
 
   .nav-label {

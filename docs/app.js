@@ -16,6 +16,20 @@ const views = {
 
 const navItems = [...document.querySelectorAll(".nav-item")];
 
+function normalizeNavLabels() {
+  const useCompactLabels = window.innerWidth <= 430;
+
+  navItems.forEach((item) => {
+    const labels = [...item.querySelectorAll(".nav-label")];
+    if (labels.length <= 1) {
+      return;
+    }
+
+    const preferredLabel = useCompactLabels ? labels[labels.length - 1] : labels[0];
+    item.replaceChildren(preferredLabel.cloneNode(true));
+  });
+}
+
 const workoutForm = document.querySelector("#workout-form");
 const workoutFormTitle = document.querySelector("#workout-form-title");
 const workoutDraftStatus = document.querySelector("#workout-draft-status");
@@ -710,6 +724,8 @@ navItems.forEach((item) => {
   item.addEventListener("click", () => switchView(item.dataset.view));
 });
 
+window.addEventListener("resize", normalizeNavLabels);
+
 workoutTypeInput.addEventListener("change", () => {
   refreshWorkoutExerciseCards();
   persistWorkoutDraft();
@@ -879,6 +895,7 @@ measurementForm.addEventListener("submit", (event) => {
 restoreWorkoutDraft();
 restoreExerciseDraft();
 restoreMeasurementDraft();
+normalizeNavLabels();
 renderExerciseHistory();
 renderWorkoutHistory();
 renderMeasurementHistory();
