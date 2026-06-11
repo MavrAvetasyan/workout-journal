@@ -6,6 +6,7 @@ const storageKeys = {
   exerciseDraft: "training-journal-exercise-draft-v1",
   measurementDraft: "training-journal-measurement-draft-v1",
   lastView: "training-journal-last-view-v1",
+  pendingExerciseContext: "training-journal-pending-exercise-context-v1",
 };
 
 const views = {
@@ -35,6 +36,7 @@ const openWorkoutFormButton = document.querySelector("#open-workout-form-button"
 const resetWorkoutButton = document.querySelector("#reset-workout-button");
 const addWorkoutExerciseButton = document.querySelector("#add-workout-exercise-button");
 const exercisePickerHint = document.querySelector("#exercise-picker-hint");
+const createExerciseFromWorkoutButton = document.querySelector("#create-exercise-from-workout-button");
 
 const exerciseForm = document.querySelector("#exercise-form");
 const exerciseFormTitle = document.querySelector("#exercise-form-title");
@@ -251,6 +253,10 @@ function pluralize(count, one, few, many) {
   return many;
 }
 
+function getActiveViewName() {
+  return Object.entries(views).find(([, element]) => element.classList.contains("is-active"))?.[0] ?? "workouts";
+}
+
 function normalizeNavLabels() {
   navItems.forEach((item) => {
     const labels = [...item.querySelectorAll(".nav-label")];
@@ -311,6 +317,82 @@ function normalizeWorkoutExercise(item = {}) {
   };
 }
 
+function hasMeaningfulWorkoutInProgress() {
+  const draft = buildWorkoutDraft();
+  return Boolean(
+    draft.id ||
+    draft.title ||
+    draft.type !== "strength" ||
+    draft.exercises.some((entry) => entry.exerciseId || entry.sets || entry.weight || entry.reps || entry.note)
+  );
+}
+
+function hasMeaningfulExerciseDraft() {
+  const draft = buildExerciseDraft();
+  return Boolean(draft.id || draft.name || draft.type !== "strength" || draft.description);
+}
+
+function loadPendingExerciseContext() {
+  return loadObject(storageKeys.pendingExerciseContext);
+}
+
+function savePendingExerciseContext(value) {
+  return saveObject(storageKeys.pendingExerciseContext, value, "сохранить контекст создания упражнения");
+}
+
+function clearPendingExerciseContext() {
+  return clearObject(storageKeys.pendingExerciseContext, "очистить контекст создания упражнения");
+}
+
+function findPendingWorkoutCardIndex() {
+  const cards = [...workoutExercisesList.querySelectorAll(".exercise-card")];
+  const firstEmptyIndex = cards.findIndex((card) => !card.querySelector(".workout-exercise-id").value);
+  return firstEmptyIndex >= 0 ? firstEmptyIndex : Math.max(cards.length - 1, 0);
+}
+
+function ensureWorkoutCardAtIndex(index) {
+  while (workoutExercisesList.children.length <= index) {
+    createWorkoutExerciseCard();
+  }
+}
+
+function applyExerciseToWorkoutCard(index, exerciseId) {
+  ensureWorkoutCardAtIndex(index);
+  const cards = [...workoutExercisesList.querySelectorAll(".exercise-card")];
+  const card = cards[index] ?? cards[cards.length - 1];
+  if (!card) {
+    return;
+  }
+
+  const select = card.querySelector(".workout-exercise-id");
+  select.value = exerciseId;
+  refreshWorkoutExerciseCards();
+  persistWorkoutDraft();
+}
+
+function startExerciseCreationFromWorkout() {
+  const workoutType = workoutTypeInput.value;
+  savePendingExerciseContext({
+    workoutType,
+    targetCardIndex: findPendingWorkoutCardIndex(),
+    createdAt: new Date().toISOString(),
+  });
+
+  switchView("exercises", { skipWorkoutExerciseRedirect: true });
+
+  if (!hasMeaningfulExerciseDraft()) {
+    resetExerciseForm({ preserveDraft: false, preserveStatus: true });
+    exerciseTypeInput.value = workoutType;
+  }
+
+  setDraftStatus(
+    exerciseDraftStatus,
+    `Создай ${workoutTypeLabel(workoutType).toLowerCase()} упражнение. После сохранения вернем его в текущую тренировку.`
+  );
+  persistExerciseDraft();
+  exerciseNameInput.focus();
+}
+
 function renderExercisePicker(select, selectedId = "") {
   const workoutType = workoutTypeInput.value;
   const exercises = getActiveExercises().filter((exercise) => exercise.type === workoutType);
@@ -340,6 +422,8 @@ function refreshWorkoutExerciseCards() {
   exercisePickerHint.textContent = availableExercises.length
     ? ""
     : `Для ${workoutTypeLabel(currentType).toLowerCase()} тренировки пока нет упражнений. Сначала добавь их в раздел "Упражнения".`;
+  createExerciseFromWorkoutButton.hidden = availableExercises.length > 0;
+  createExerciseFromWorkoutButton.textContent = `Создать ${workoutTypeLabel(currentType).toLowerCase()} упражнение`;
 }
 
 function collectWorkoutExercises() {
@@ -885,7 +969,21 @@ function getLastView() {
   return typeof value === "string" && views[value] ? value : "workouts";
 }
 
-function switchView(viewName) {
+function switchView(viewName, options = {}) {
+  const previousView = getActiveViewName();
+
+  if (
+    viewName === "exercises" &&
+    previousView === "workouts" &&
+    !options.skipWorkoutExerciseRedirect &&
+    !exercisePickerHint.hidden &&
+    hasMeaningfulWorkoutInProgress() &&
+    !loadPendingExerciseContext()
+  ) {
+    startExerciseCreationFromWorkout();
+    return;
+  }
+
   Object.entries(views).forEach(([key, element]) => {
     element.classList.toggle("is-active", key === viewName);
   });
@@ -1112,6 +1210,7 @@ resetWorkoutButton.addEventListener("click", () => resetWorkoutForm());
 resetExerciseButton.addEventListener("click", () => resetExerciseForm());
 resetMeasurementButton.addEventListener("click", () => resetMeasurementForm());
 addWorkoutExerciseButton.addEventListener("click", () => createWorkoutExerciseCard());
+createExerciseFromWorkoutButton.addEventListener("click", () => startExerciseCreationFromWorkout());
 
 exportDataButton.addEventListener("click", exportData);
 importDataButton.addEventListener("click", () => importDataInput.click());
@@ -1229,10 +1328,27 @@ exerciseForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const pendingExerciseContext = loadPendingExerciseContext();
   clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
   resetExerciseForm();
   renderExerciseHistory();
   refreshWorkoutExerciseCards();
+
+  if (pendingExerciseContext && pendingExerciseContext.workoutType === exercise.type) {
+    applyExerciseToWorkoutCard(pendingExerciseContext.targetCardIndex ?? 0, exercise.id);
+    clearPendingExerciseContext();
+    switchView("workouts", { skipWorkoutExerciseRedirect: true });
+    showToast("Упражнение сохранено и добавлено в текущую тренировку.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
+  if (pendingExerciseContext) {
+    clearPendingExerciseContext();
+    showToast("Упражнение сохранено. Оно не добавлено в тренировку, потому что тип не совпадает.");
+    return;
+  }
+
   showToast("Упражнение сохранено.");
 });
 
