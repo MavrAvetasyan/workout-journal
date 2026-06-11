@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Журнал тренировок</title>
-  <link rel="stylesheet" href="./styles.css?v=20260611c">
+  <link rel="stylesheet" href="./styles.css?v=20260611d">
 </head>
 <body>
   <div class="page-glow page-glow-left"></div>
@@ -13,25 +13,47 @@
   <div class="app-shell">
     <main class="views">
       <section id="view-workouts" class="view is-active">
-        <div class="view-intro">
-          <div>
-            <p class="section-kicker">Тренировки</p>
-            <h2>Тренировки</h2>
-          </div>
-          <button id="open-workout-form-button" class="primary-button" type="button">Новая тренировка</button>
-        </div>
+        <div class="subview is-active" data-subview="list">
+          <header class="screen-header screen-header-workouts">
+            <div class="screen-title-wrap">
+              <span class="screen-icon" aria-hidden="true">🏋</span>
+              <div>
+                <p class="screen-kicker">Тренировки</p>
+                <h2>История тренировок</h2>
+              </div>
+            </div>
+            <button id="open-workout-form-button" class="circle-action" type="button" aria-label="Новая тренировка">+</button>
+          </header>
 
-        <div class="content-grid">
-          <section class="panel panel-form">
+          <section class="panel list-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-kicker">Форма</p>
-                <h3 id="workout-form-title">Тренировка</h3>
+                <p class="section-kicker">Список</p>
+                <h3>Последние тренировки</h3>
               </div>
-              <button id="reset-workout-button" class="ghost-button" type="button">Очистить</button>
+              <span id="workout-history-count" class="history-count">0 записей</span>
             </div>
-            <p id="workout-draft-status" class="draft-status" hidden></p>
+            <div id="workout-empty-state" class="empty-state">
+              <div class="empty-state-icon">🏋</div>
+              <h4>Тренировок пока нет</h4>
+              <p>Добавь первую тренировку, и история появится здесь.</p>
+            </div>
+            <div id="workout-history-list" class="history-list"></div>
+          </section>
+        </div>
 
+        <div class="subview" data-subview="form">
+          <header class="screen-header screen-header-workouts">
+            <button class="back-button" type="button" data-back="workouts">Назад</button>
+            <div class="screen-title-center">
+              <p class="screen-kicker">Тренировки</p>
+              <h2 id="workout-form-title">Новая тренировка</h2>
+            </div>
+            <button class="header-save-button" type="submit" form="workout-form">Сохранить</button>
+          </header>
+
+          <section class="panel form-panel">
+            <p id="workout-draft-status" class="draft-status" hidden></p>
             <form id="workout-form" class="stack-form">
               <input id="workout-id" type="hidden">
 
@@ -53,7 +75,6 @@
                   <span>Время начала</span>
                   <input id="workout-start-time" type="datetime-local" required>
                 </label>
-
                 <label class="field">
                   <span>Время окончания</span>
                   <input id="workout-end-time" type="datetime-local" required>
@@ -74,50 +95,56 @@
               </section>
 
               <div class="form-actions">
+                <button id="reset-workout-button" class="ghost-button" type="button">Очистить</button>
                 <button class="primary-button primary-button-wide" type="submit">Сохранить тренировку</button>
               </div>
             </form>
-          </section>
-
-          <section class="panel panel-history">
-            <div class="panel-heading">
-              <div>
-                <p class="section-kicker">Список</p>
-                <h3>Тренировки</h3>
-              </div>
-              <span id="workout-history-count" class="history-count">0 записей</span>
-            </div>
-
-            <div id="workout-empty-state" class="empty-state">
-              <div class="empty-state-icon">+</div>
-              <h4>Тренировок пока нет</h4>
-              <p>Сохрани первую тренировку, и история появится здесь.</p>
-            </div>
-
-            <div id="workout-history-list" class="history-list"></div>
           </section>
         </div>
       </section>
 
       <section id="view-exercises" class="view">
-        <div class="view-intro">
-          <div>
-            <p class="section-kicker">Упражнения</p>
-            <h2>Справочник</h2>
-          </div>
-        </div>
+        <div class="subview is-active" data-subview="list">
+          <header class="screen-header screen-header-exercises">
+            <div class="screen-title-wrap">
+              <span class="screen-icon" aria-hidden="true">💪</span>
+              <div>
+                <p class="screen-kicker">Упражнения</p>
+                <h2>Справочник</h2>
+              </div>
+            </div>
+            <button id="open-exercise-form-button" class="circle-action" type="button" aria-label="Новое упражнение">+</button>
+          </header>
 
-        <div class="content-grid">
-          <section class="panel panel-form">
+          <section class="panel list-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-kicker">Форма</p>
-                <h3 id="exercise-form-title">Упражнение</h3>
+                <p class="section-kicker">Список</p>
+                <h3>Упражнения</h3>
               </div>
-              <button id="reset-exercise-button" class="ghost-button" type="button">Очистить</button>
+              <span id="exercise-history-count" class="history-count">0 записей</span>
             </div>
-            <p id="exercise-draft-status" class="draft-status" hidden></p>
+            <div id="exercise-empty-state" class="empty-state">
+              <div class="empty-state-icon">💪</div>
+              <h4>Справочник пуст</h4>
+              <p>Добавь упражнения один раз, чтобы потом просто выбирать их в тренировке.</p>
+            </div>
+            <div id="exercise-history-list" class="history-list"></div>
+          </section>
+        </div>
 
+        <div class="subview" data-subview="form">
+          <header class="screen-header screen-header-exercises">
+            <button class="back-button" type="button" data-back="exercises">Назад</button>
+            <div class="screen-title-center">
+              <p class="screen-kicker">Упражнения</p>
+              <h2 id="exercise-form-title">Новое упражнение</h2>
+            </div>
+            <button class="header-save-button" type="submit" form="exercise-form">Сохранить</button>
+          </header>
+
+          <section class="panel form-panel">
+            <p id="exercise-draft-status" class="draft-status" hidden></p>
             <form id="exercise-form" class="stack-form">
               <input id="exercise-id" type="hidden">
 
@@ -136,54 +163,72 @@
 
               <label class="field">
                 <span>Описание или заметка</span>
-                <textarea id="exercise-description" rows="4" placeholder="Например, особенности техники или комментарии"></textarea>
+                <textarea id="exercise-description" rows="4" placeholder="Например, техника или комментарий"></textarea>
               </label>
 
               <div class="form-actions">
+                <button id="reset-exercise-button" class="ghost-button" type="button">Очистить</button>
                 <button class="primary-button primary-button-wide" type="submit">Сохранить упражнение</button>
               </div>
             </form>
-          </section>
-
-          <section class="panel panel-history">
-            <div class="panel-heading">
-              <div>
-                <p class="section-kicker">Список</p>
-                <h3>Упражнения</h3>
-              </div>
-              <span id="exercise-history-count" class="history-count">0 записей</span>
-            </div>
-
-            <div id="exercise-empty-state" class="empty-state">
-              <div class="empty-state-icon">+</div>
-              <h4>Справочник пуст</h4>
-              <p>Добавь упражнения один раз, чтобы потом просто выбирать их в тренировке.</p>
-            </div>
-
-            <div id="exercise-history-list" class="history-list"></div>
           </section>
         </div>
       </section>
 
       <section id="view-measurements" class="view">
-        <div class="view-intro">
-          <div>
-            <p class="section-kicker">Замеры</p>
-            <h2>Замеры</h2>
-          </div>
-        </div>
+        <div class="subview is-active" data-subview="list">
+          <header class="screen-header screen-header-measurements">
+            <div class="screen-title-wrap">
+              <span class="screen-icon" aria-hidden="true">📏</span>
+              <div>
+                <p class="screen-kicker">Замеры</p>
+                <h2>Прогресс тела</h2>
+              </div>
+            </div>
+            <button id="open-measurement-form-button" class="circle-action" type="button" aria-label="Новый замер">+</button>
+          </header>
 
-        <div class="content-grid">
-          <section class="panel panel-form">
+          <section class="panel metrics-hero">
+            <div class="hero-figure" aria-hidden="true">
+              <div class="hero-ruler"></div>
+              <div class="hero-athlete">🏃</div>
+            </div>
+            <div>
+              <p class="section-kicker">Быстрый обзор</p>
+              <h3>Отслеживай вес, объемы и жир</h3>
+              <p>Новый замер открывается на отдельном экране, а предыдущие значения помогают вводить данные быстрее.</p>
+            </div>
+          </section>
+
+          <section class="panel list-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-kicker">Форма</p>
-                <h3 id="measurement-form-title">Замер</h3>
+                <p class="section-kicker">Список</p>
+                <h3>Замеры</h3>
               </div>
-              <button id="reset-measurement-button" class="ghost-button" type="button">Очистить</button>
+              <span id="measurement-history-count" class="history-count">0 записей</span>
             </div>
-            <p id="measurement-draft-status" class="draft-status" hidden></p>
+            <div id="measurement-empty-state" class="empty-state">
+              <div class="empty-state-icon">📏</div>
+              <h4>Замеров пока нет</h4>
+              <p>Сохрани первый замер, чтобы потом видеть изменения по телу.</p>
+            </div>
+            <div id="measurement-history-list" class="history-list"></div>
+          </section>
+        </div>
 
+        <div class="subview" data-subview="form">
+          <header class="screen-header screen-header-measurements">
+            <button class="back-button" type="button" data-back="measurements">Назад</button>
+            <div class="screen-title-center">
+              <p class="screen-kicker">Замеры</p>
+              <h2 id="measurement-form-title">Новый замер</h2>
+            </div>
+            <button class="header-save-button" type="submit" form="measurement-form">Сохранить</button>
+          </header>
+
+          <section class="panel form-panel">
+            <p id="measurement-draft-status" class="draft-status" hidden></p>
             <form id="measurement-form" class="stack-form">
               <input id="measurement-id" type="hidden">
 
@@ -204,7 +249,7 @@
                 </label>
                 <label class="field">
                   <span>Процент жира</span>
-                  <input id="measurement-body-fat" type="number" min="0" step="0.1" placeholder="18.2">
+                  <input id="measurement-body-fat" type="number" min="0" max="100" step="0.1" placeholder="18.2">
                 </label>
               </div>
 
@@ -237,85 +282,77 @@
 
               <label class="field">
                 <span>Заметка</span>
-                <textarea id="measurement-note" rows="4" placeholder="Например, утром натощак или после тренировки"></textarea>
+                <textarea id="measurement-note" rows="4" placeholder="Например, утром натощак"></textarea>
               </label>
 
               <div class="form-actions">
+                <button id="reset-measurement-button" class="ghost-button" type="button">Очистить</button>
                 <button class="primary-button primary-button-wide" type="submit">Сохранить замер</button>
               </div>
             </form>
-          </section>
-
-          <section class="panel panel-history">
-            <div class="panel-heading">
-              <div>
-                <p class="section-kicker">Список</p>
-                <h3>Замеры</h3>
-              </div>
-              <span id="measurement-history-count" class="history-count">0 записей</span>
-            </div>
-
-            <div id="measurement-empty-state" class="empty-state">
-              <div class="empty-state-icon">+</div>
-              <h4>Замеров пока нет</h4>
-              <p>Можно сохранять только те поля, которые действительно замерили.</p>
-            </div>
-
-            <div id="measurement-history-list" class="history-list"></div>
           </section>
         </div>
       </section>
 
       <section id="view-more" class="view">
-        <div class="view-intro">
-          <div>
-            <p class="section-kicker">Еще</p>
-            <h2>Еще</h2>
-          </div>
-        </div>
-
-        <section class="panel info-panel">
-          <article class="info-card">
-            <h3>Как сейчас хранятся данные</h3>
-            <p>Тренировки, упражнения, замеры и черновики сохраняются локально в браузере на этом устройстве.</p>
-          </article>
-
-          <article class="info-card">
-            <h3>Что уже поддерживается</h3>
-            <p>Незаполненные формы восстанавливаются после обновления страницы. Для тренировок можно выбирать упражнения из заранее созданного справочника.</p>
-          </article>
-
-          <article class="info-card">
-            <h3>Резервная копия</h3>
-            <p>Можно выгрузить все данные в файл и позже восстановить их через импорт. Это защитит историю от случайной потери.</p>
-          </article>
-
-          <article class="info-card">
-            <h3>Действия с данными</h3>
-            <div class="info-card-actions">
-              <button id="export-data-button" class="secondary-button" type="button">Экспорт данных</button>
-              <button id="import-data-button" class="secondary-button" type="button">Импорт данных</button>
-              <button id="clear-all-data-button" class="ghost-button" type="button">Очистить все данные</button>
+        <div class="subview is-active" data-subview="list">
+          <header class="screen-header screen-header-more">
+            <div class="screen-title-wrap">
+              <span class="screen-icon" aria-hidden="true">⚙</span>
+              <div>
+                <p class="screen-kicker">Еще</p>
+                <h2>Данные и настройки</h2>
+              </div>
             </div>
-            <input id="import-data-input" type="file" accept="application/json" hidden>
-            <p>Экспорт сохраняет тренировки, упражнения, замеры и черновики. Очистка удаляет все локальные данные только на этом устройстве.</p>
-          </article>
-        </section>
+          </header>
+
+          <section class="panel info-panel">
+            <article class="info-card">
+              <h3>Как сейчас хранятся данные</h3>
+              <p>Тренировки, упражнения, замеры и черновики сохраняются локально в браузере на этом устройстве.</p>
+            </article>
+
+            <article class="info-card">
+              <h3>Что уже поддерживается</h3>
+              <p>Черновики форм восстанавливаются. Для тренировок можно создавать упражнения прямо из текущего сценария.</p>
+            </article>
+
+            <article class="info-card">
+              <h3>Резервная копия</h3>
+              <p>Можно выгрузить все данные в файл и позже восстановить их через импорт.</p>
+            </article>
+
+            <article class="info-card">
+              <h3>Действия с данными</h3>
+              <div class="info-card-actions">
+                <button id="export-data-button" class="secondary-button" type="button">Экспорт данных</button>
+                <button id="import-data-button" class="secondary-button" type="button">Импорт данных</button>
+                <button id="clear-all-data-button" class="ghost-button" type="button">Очистить все данные</button>
+              </div>
+              <input id="import-data-input" type="file" accept="application/json" hidden>
+              <p>Очистка затрагивает только это устройство.</p>
+            </article>
+          </section>
+        </div>
       </section>
     </main>
   </div>
 
   <nav class="bottom-nav" aria-label="Основная навигация">
     <button class="nav-item is-active" type="button" data-view="workouts">
-      <span class="nav-label">Трен.</span>
+      <span class="nav-icon" aria-hidden="true">🏋</span>
+      <span class="nav-label">Тренировки</span>
     </button>
     <button class="nav-item" type="button" data-view="exercises">
-      <span class="nav-label">Упр.</span>
+      <span class="nav-icon" aria-hidden="true">💪</span>
+      <span class="nav-label">Упражнения</span>
     </button>
     <button class="nav-item" type="button" data-view="measurements">
+      <span class="nav-icon" aria-hidden="true">📏</span>
       <span class="nav-label">Замеры</span>
     </button>
     <button class="nav-item" type="button" data-view="more">
+      <span class="nav-icon" aria-hidden="true">⚙</span>
       <span class="nav-label">Еще</span>
     </button>
   </nav>
@@ -359,6 +396,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=20260611c" defer></script>
+  <script src="./app.js?v=20260611d" defer></script>
 </body>
 </html>

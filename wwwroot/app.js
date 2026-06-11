@@ -1,12 +1,12 @@
 const storageKeys = {
   workouts: "training-journal-workouts-v2",
-  exercises: "training-journal-exercises-v2",
-  measurements: "training-journal-measurements-v1",
-  workoutDraft: "training-journal-workout-draft-v2",
-  exerciseDraft: "training-journal-exercise-draft-v1",
-  measurementDraft: "training-journal-measurement-draft-v1",
-  lastView: "training-journal-last-view-v1",
-  pendingExerciseContext: "training-journal-pending-exercise-context-v1",
+  exercises: "training-journal-exercises-v3",
+  measurements: "training-journal-measurements-v2",
+  workoutDraft: "training-journal-workout-draft-v3",
+  exerciseDraft: "training-journal-exercise-draft-v2",
+  measurementDraft: "training-journal-measurement-draft-v2",
+  lastView: "training-journal-last-view-v2",
+  pendingExerciseContext: "training-journal-pending-exercise-context-v2",
 };
 
 const views = {
@@ -17,6 +17,7 @@ const views = {
 };
 
 const navItems = [...document.querySelectorAll(".nav-item")];
+const body = document.body;
 const toast = document.querySelector("#toast");
 
 const workoutForm = document.querySelector("#workout-form");
@@ -48,6 +49,7 @@ const exerciseDescriptionInput = document.querySelector("#exercise-description")
 const exerciseHistoryList = document.querySelector("#exercise-history-list");
 const exerciseHistoryCount = document.querySelector("#exercise-history-count");
 const exerciseEmptyState = document.querySelector("#exercise-empty-state");
+const openExerciseFormButton = document.querySelector("#open-exercise-form-button");
 const resetExerciseButton = document.querySelector("#reset-exercise-button");
 
 const measurementForm = document.querySelector("#measurement-form");
@@ -68,6 +70,7 @@ const measurementNoteInput = document.querySelector("#measurement-note");
 const measurementHistoryList = document.querySelector("#measurement-history-list");
 const measurementHistoryCount = document.querySelector("#measurement-history-count");
 const measurementEmptyState = document.querySelector("#measurement-empty-state");
+const openMeasurementFormButton = document.querySelector("#open-measurement-form-button");
 const resetMeasurementButton = document.querySelector("#reset-measurement-button");
 
 const exportDataButton = document.querySelector("#export-data-button");
@@ -75,15 +78,20 @@ const importDataButton = document.querySelector("#import-data-button");
 const importDataInput = document.querySelector("#import-data-input");
 const clearAllDataButton = document.querySelector("#clear-all-data-button");
 
+const backButtons = [...document.querySelectorAll("[data-back]")];
+const viewModes = {
+  workouts: "list",
+  exercises: "list",
+  measurements: "list",
+  more: "list",
+};
+
+let activeView = "workouts";
 let toastTimer = null;
 let pendingDelete = null;
 let suppressSaveErrors = false;
 
 function showToast(message, { duration = 3200, actionLabel = "", onAction = null } = {}) {
-  if (!toast) {
-    return;
-  }
-
   toast.hidden = false;
   toast.innerHTML = "";
 
@@ -108,10 +116,6 @@ function showToast(message, { duration = 3200, actionLabel = "", onAction = null
 }
 
 function hideToast() {
-  if (!toast) {
-    return;
-  }
-
   toast.hidden = true;
   toast.innerHTML = "";
 }
@@ -122,7 +126,7 @@ function reportStorageError(actionLabel, error) {
   }
 
   console.error(error);
-  showToast(`Не удалось ${actionLabel}. Проверь свободное место в браузере.`);
+  showToast(`Не удалось ${actionLabel}. Проверь место в браузере.`);
   return false;
 }
 
@@ -155,7 +159,7 @@ function loadList(key) {
   }
 }
 
-function saveList(key, value, actionLabel = "сохранить данные") {
+function saveList(key, value, actionLabel) {
   return safeSetItem(key, JSON.stringify(value), actionLabel);
 }
 
@@ -170,30 +174,23 @@ function loadObject(key) {
   }
 }
 
-function saveObject(key, value, actionLabel = "сохранить данные") {
+function saveObject(key, value, actionLabel) {
   return safeSetItem(key, JSON.stringify(value), actionLabel);
 }
 
-function clearObject(key, actionLabel = "очистить данные") {
+function clearObject(key, actionLabel) {
   return safeRemoveItem(key, actionLabel);
 }
 
 function uid() {
-  if (window.crypto && "randomUUID" in window.crypto) {
+  if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
   }
-
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function setDraftStatus(element, text = "") {
-  if (!text) {
-    element.hidden = true;
-    element.textContent = "";
-    return;
-  }
-
-  element.hidden = false;
+  element.hidden = !text;
   element.textContent = text;
 }
 
@@ -241,31 +238,9 @@ function escapeHtml(value) {
 function pluralize(count, one, few, many) {
   const mod10 = count % 10;
   const mod100 = count % 100;
-
-  if (mod10 === 1 && mod100 !== 11) {
-    return one;
-  }
-
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return few;
-  }
-
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
   return many;
-}
-
-function getActiveViewName() {
-  return Object.entries(views).find(([, element]) => element.classList.contains("is-active"))?.[0] ?? "workouts";
-}
-
-function normalizeNavLabels() {
-  navItems.forEach((item) => {
-    const labels = [...item.querySelectorAll(".nav-label")];
-    if (labels.length <= 1) {
-      return;
-    }
-
-    item.replaceChildren(labels[0].cloneNode(true));
-  });
 }
 
 function getWorkouts() {
@@ -277,18 +252,19 @@ function setWorkouts(items) {
 }
 
 function getExercises() {
-  return loadList(storageKeys.exercises);
-}
-
-function migrateExercises(items) {
-  return items.map((item) => ({
-    ...item,
-    archived: Boolean(item.archived),
-  }));
+  return loadList(storageKeys.exercises).map((item) => ({ ...item, archived: Boolean(item.archived) }));
 }
 
 function setExercises(items) {
   return saveList(storageKeys.exercises, items, "сохранить упражнения");
+}
+
+function getActiveExercises() {
+  return getExercises().filter((item) => !item.archived);
+}
+
+function getExerciseById(id) {
+  return getExercises().find((item) => item.id === id) ?? null;
 }
 
 function getMeasurements() {
@@ -297,14 +273,6 @@ function getMeasurements() {
 
 function setMeasurements(items) {
   return saveList(storageKeys.measurements, items, "сохранить замеры");
-}
-
-function getExerciseById(exerciseId) {
-  return getExercises().find((item) => item.id === exerciseId) ?? null;
-}
-
-function getActiveExercises() {
-  return getExercises().filter((item) => !item.archived);
 }
 
 function normalizeWorkoutExercise(item = {}) {
@@ -323,7 +291,7 @@ function hasMeaningfulWorkoutInProgress() {
     draft.id ||
     draft.title ||
     draft.type !== "strength" ||
-    draft.exercises.some((entry) => entry.exerciseId || entry.sets || entry.weight || entry.reps || entry.note)
+    draft.exercises.some((item) => item.exerciseId || item.sets || item.weight || item.reps || item.note)
   );
 }
 
@@ -360,82 +328,55 @@ function applyExerciseToWorkoutCard(index, exerciseId) {
   ensureWorkoutCardAtIndex(index);
   const cards = [...workoutExercisesList.querySelectorAll(".exercise-card")];
   const card = cards[index] ?? cards[cards.length - 1];
-  if (!card) {
-    return;
-  }
-
-  const select = card.querySelector(".workout-exercise-id");
-  select.value = exerciseId;
+  if (!card) return;
+  card.querySelector(".workout-exercise-id").value = exerciseId;
   refreshWorkoutExerciseCards();
   persistWorkoutDraft();
 }
 
-function startExerciseCreationFromWorkout() {
-  const workoutType = workoutTypeInput.value;
-  savePendingExerciseContext({
-    workoutType,
-    targetCardIndex: findPendingWorkoutCardIndex(),
-    createdAt: new Date().toISOString(),
+function updateBodyDetailMode() {
+  const isDetail = viewModes[activeView] === "form";
+  body.classList.toggle("is-detail-mode", isDetail);
+}
+
+function saveLastView(viewName) {
+  saveObject(storageKeys.lastView, viewName, "сохранить активный раздел");
+}
+
+function getLastView() {
+  const value = loadObject(storageKeys.lastView);
+  return typeof value === "string" && views[value] ? value : "workouts";
+}
+
+function showView(viewName) {
+  activeView = viewName;
+  Object.entries(views).forEach(([key, element]) => {
+    element.classList.toggle("is-active", key === viewName);
   });
-
-  switchView("exercises", { skipWorkoutExerciseRedirect: true });
-
-  if (!hasMeaningfulExerciseDraft()) {
-    resetExerciseForm({ preserveDraft: false, preserveStatus: true });
-    exerciseTypeInput.value = workoutType;
-  }
-
-  setDraftStatus(
-    exerciseDraftStatus,
-    `Создай ${workoutTypeLabel(workoutType).toLowerCase()} упражнение. После сохранения вернем его в текущую тренировку.`
-  );
-  persistExerciseDraft();
-  exerciseNameInput.focus();
-}
-
-function renderExercisePicker(select, selectedId = "") {
-  const workoutType = workoutTypeInput.value;
-  const exercises = getActiveExercises().filter((exercise) => exercise.type === workoutType);
-  const placeholder = `<option value="">Выбери упражнение</option>`;
-  const options = exercises
-    .map((exercise) => `<option value="${exercise.id}">${escapeHtml(exercise.name)}</option>`)
-    .join("");
-
-  select.innerHTML = `${placeholder}${options}`;
-  select.value = selectedId && exercises.some((item) => item.id === selectedId) ? selectedId : "";
-}
-
-function refreshWorkoutExerciseCards() {
-  const cards = [...workoutExercisesList.querySelectorAll(".exercise-card")];
-
-  cards.forEach((card, index) => {
-    card.querySelector(".exercise-index-label").textContent = `Упражнение ${index + 1}`;
-    const select = card.querySelector(".workout-exercise-id");
-    const selectedExercise = getExerciseById(select.value);
-    card.querySelector(".exercise-card-title").textContent = selectedExercise?.name || "Новый блок";
-    renderExercisePicker(select, select.value);
+  navItems.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.view === viewName);
   });
-
-  const currentType = workoutTypeInput.value;
-  const availableExercises = getActiveExercises().filter((exercise) => exercise.type === currentType);
-  exercisePickerHint.hidden = availableExercises.length > 0;
-  exercisePickerHint.textContent = availableExercises.length
-    ? ""
-    : `Для ${workoutTypeLabel(currentType).toLowerCase()} тренировки пока нет упражнений. Сначала добавь их в раздел "Упражнения".`;
-  createExerciseFromWorkoutButton.hidden = availableExercises.length > 0;
-  createExerciseFromWorkoutButton.textContent = `Создать ${workoutTypeLabel(currentType).toLowerCase()} упражнение`;
+  updateBodyDetailMode();
+  saveLastView(viewName);
 }
 
-function collectWorkoutExercises() {
-  return [...workoutExercisesList.querySelectorAll(".exercise-card")]
-    .map((card) => ({
-      exerciseId: card.querySelector(".workout-exercise-id").value,
-      sets: card.querySelector(".exercise-sets").value,
-      weight: card.querySelector(".exercise-weight").value,
-      reps: card.querySelector(".exercise-reps").value,
-      note: card.querySelector(".exercise-note").value.trim(),
-    }))
-    .filter((item) => item.exerciseId || item.sets || item.weight || item.reps || item.note);
+function showSubview(viewName, mode) {
+  viewModes[viewName] = mode;
+  const subviews = [...views[viewName].querySelectorAll(".subview")];
+  subviews.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.subview === mode);
+  });
+  updateBodyDetailMode();
+}
+
+function openListView(viewName) {
+  showView(viewName);
+  showSubview(viewName, "list");
+}
+
+function openFormView(viewName) {
+  showView(viewName);
+  showSubview(viewName, "form");
 }
 
 function buildWorkoutDraft() {
@@ -450,6 +391,18 @@ function buildWorkoutDraft() {
   };
 }
 
+function collectWorkoutExercises() {
+  return [...workoutExercisesList.querySelectorAll(".exercise-card")]
+    .map((card) => ({
+      exerciseId: card.querySelector(".workout-exercise-id").value,
+      sets: card.querySelector(".exercise-sets").value,
+      weight: card.querySelector(".exercise-weight").value,
+      reps: card.querySelector(".exercise-reps").value,
+      note: card.querySelector(".exercise-note").value.trim(),
+    }))
+    .filter((item) => item.exerciseId || item.sets || item.weight || item.reps || item.note);
+}
+
 function persistWorkoutDraft() {
   const draft = buildWorkoutDraft();
   const hasMeaning = Boolean(
@@ -460,12 +413,41 @@ function persistWorkoutDraft() {
     draft.endTime ||
     draft.exercises.length
   );
-
   if (hasMeaning) {
     saveObject(storageKeys.workoutDraft, draft, "сохранить черновик тренировки");
   } else {
     clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   }
+}
+
+function renderExercisePicker(select, selectedId = "") {
+  const workoutType = workoutTypeInput.value;
+  const exercises = getActiveExercises().filter((item) => item.type === workoutType);
+  const options = exercises
+    .map((exercise) => `<option value="${exercise.id}">${escapeHtml(exercise.name)}</option>`)
+    .join("");
+  select.innerHTML = `<option value="">Выбери упражнение</option>${options}`;
+  select.value = selectedId && exercises.some((item) => item.id === selectedId) ? selectedId : "";
+}
+
+function refreshWorkoutExerciseCards() {
+  const cards = [...workoutExercisesList.querySelectorAll(".exercise-card")];
+  cards.forEach((card, index) => {
+    card.querySelector(".exercise-index-label").textContent = `Упражнение ${index + 1}`;
+    const select = card.querySelector(".workout-exercise-id");
+    const selectedExercise = getExerciseById(select.value);
+    renderExercisePicker(select, select.value);
+    card.querySelector(".exercise-card-title").textContent = selectedExercise?.name || "Новый блок";
+  });
+
+  const currentType = workoutTypeInput.value;
+  const availableExercises = getActiveExercises().filter((item) => item.type === currentType);
+  exercisePickerHint.hidden = availableExercises.length > 0;
+  createExerciseFromWorkoutButton.hidden = availableExercises.length > 0;
+  exercisePickerHint.textContent = availableExercises.length
+    ? ""
+    : `Для ${workoutTypeLabel(currentType).toLowerCase()} тренировки пока нет упражнений. Сначала добавь их в раздел "Упражнения".`;
+  createExerciseFromWorkoutButton.textContent = `Создать ${workoutTypeLabel(currentType).toLowerCase()} упражнение`;
 }
 
 function createWorkoutExerciseCard(value = {}) {
@@ -518,21 +500,14 @@ function applyDefaultWorkoutTimes() {
 function resetWorkoutForm({ preserveDraft = false, preserveStatus = false } = {}) {
   workoutForm.reset();
   workoutIdInput.value = "";
-  workoutFormTitle.textContent = "Тренировка";
+  workoutFormTitle.textContent = "Новая тренировка";
   workoutExercisesList.innerHTML = "";
   createWorkoutExerciseCard();
   workoutTypeInput.value = "strength";
-  workoutTitleInput.value = "";
   applyDefaultWorkoutTimes();
   refreshWorkoutExerciseCards();
-
-  if (!preserveDraft) {
-    clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
-  }
-
-  if (!preserveStatus) {
-    setDraftStatus(workoutDraftStatus, "");
-  }
+  if (!preserveDraft) clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
+  if (!preserveStatus) setDraftStatus(workoutDraftStatus, "");
 }
 
 function fillWorkoutForm(workout, { editing = false } = {}) {
@@ -541,15 +516,13 @@ function fillWorkoutForm(workout, { editing = false } = {}) {
   workoutTypeInput.value = workout.type ?? "strength";
   workoutStartTimeInput.value = workout.startTime ?? "";
   workoutEndTimeInput.value = workout.endTime ?? "";
-  workoutFormTitle.textContent = editing ? "Редактирование тренировки" : "Тренировка";
+  workoutFormTitle.textContent = editing ? "Редактирование тренировки" : "Новая тренировка";
   workoutExercisesList.innerHTML = "";
-
   if (workout.exercises?.length) {
-    workout.exercises.forEach((exercise) => createWorkoutExerciseCard(exercise));
+    workout.exercises.forEach((item) => createWorkoutExerciseCard(item));
   } else {
     createWorkoutExerciseCard();
   }
-
   refreshWorkoutExerciseCards();
 }
 
@@ -559,7 +532,6 @@ function restoreWorkoutDraft() {
     resetWorkoutForm({ preserveDraft: true, preserveStatus: true });
     return;
   }
-
   fillWorkoutForm(draft, { editing: Boolean(draft.id) });
   if (draft.updatedAt) {
     setDraftStatus(workoutDraftStatus, `Черновик тренировки восстановлен: ${formatDate(draft.updatedAt)}`);
@@ -567,31 +539,14 @@ function restoreWorkoutDraft() {
 }
 
 function workoutListTitle(workout) {
-  const title = workout.title?.trim();
-  if (title) {
-    return title;
-  }
-
-  return `${workoutTypeLabel(workout.type)} · ${formatDateOnly(workout.startTime)}`;
+  return workout.title?.trim() || `${workoutTypeLabel(workout.type)} · ${formatDateOnly(workout.startTime)}`;
 }
 
 function runDeleteWithUndo(config) {
-  if (pendingDelete?.finalize) {
-    pendingDelete.finalize();
-  }
-
+  if (pendingDelete?.finalize) pendingDelete.finalize();
   const applied = config.apply();
-  if (applied === false) {
-    return;
-  }
-
-  pendingDelete = {
-    finalize: () => {
-      pendingDelete = null;
-    },
-    restore: config.restore,
-  };
-
+  if (applied === false) return;
+  pendingDelete = { finalize: () => { pendingDelete = null; }, restore: config.restore };
   showToast(config.message, {
     actionLabel: "Отменить",
     onAction: () => {
@@ -602,70 +557,52 @@ function runDeleteWithUndo(config) {
 }
 
 function renderWorkoutHistory() {
-  const workouts = getWorkouts().sort((left, right) => new Date(right.startTime) - new Date(left.startTime));
+  const workouts = getWorkouts().sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
   workoutHistoryList.innerHTML = "";
   workoutHistoryCount.textContent = `${workouts.length} ${pluralize(workouts.length, "запись", "записи", "записей")}`;
   workoutEmptyState.hidden = workouts.length > 0;
 
   workouts.forEach((workout) => {
+    const summary = workout.exercises.length
+      ? workout.exercises.map((entry) => getExerciseById(entry.exerciseId)?.name || "Удаленное упражнение").join(" · ")
+      : "Без упражнений";
     const card = document.createElement("article");
     card.className = "history-card";
-
-    const summary = workout.exercises.length
-      ? workout.exercises.map((entry) => {
-          const exercise = getExerciseById(entry.exerciseId);
-          return exercise?.name || "Удаленное упражнение";
-        }).join(", ")
-      : "Без упражнений";
-
     card.innerHTML = `
-      <div class="history-row">
+      <div class="history-topline">
         <div>
-          <span class="pill">${workoutTypeLabel(workout.type)}</span>
           <h4 class="history-title">${escapeHtml(workoutListTitle(workout))}</h4>
+          <p class="history-meta">${formatDate(workout.startTime)}</p>
         </div>
+        <span class="pill">${workoutTypeLabel(workout.type)}</span>
       </div>
-      <p class="history-meta">${formatDate(workout.startTime)}</p>
       <p class="history-summary">${escapeHtml(summary)}</p>
       <div class="history-card-actions">
-        <button class="secondary-button edit-workout-button" type="button">Редактировать</button>
+        <button class="mini-icon-button edit-workout-button" type="button" aria-label="Редактировать">✎</button>
         <button class="ghost-button delete-workout-button" type="button">Удалить</button>
       </div>
     `;
-
     card.querySelector(".edit-workout-button").addEventListener("click", () => {
-      fillWorkoutForm(
-        {
-          ...workout,
-          startTime: toLocalInputValue(new Date(workout.startTime)),
-          endTime: toLocalInputValue(new Date(workout.endTime)),
-        },
-        { editing: true }
-      );
+      fillWorkoutForm({
+        ...workout,
+        startTime: toLocalInputValue(new Date(workout.startTime)),
+        endTime: toLocalInputValue(new Date(workout.endTime)),
+      }, { editing: true });
       setDraftStatus(workoutDraftStatus, "");
       persistWorkoutDraft();
-      switchView("workouts");
+      openFormView("workouts");
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
-
     card.querySelector(".delete-workout-button").addEventListener("click", () => {
-      if (!window.confirm("Удалить эту тренировку?")) {
-        return;
-      }
-
+      if (!window.confirm("Удалить эту тренировку?")) return;
       const previous = getWorkouts();
       const next = previous.filter((item) => item.id !== workout.id);
-
       runDeleteWithUndo({
         message: "Тренировка удалена.",
         apply: () => {
-          if (!setWorkouts(next)) {
-            return false;
-          }
+          if (!setWorkouts(next)) return false;
           renderWorkoutHistory();
-          if (workoutIdInput.value === workout.id) {
-            resetWorkoutForm();
-          }
+          if (workoutIdInput.value === workout.id) resetWorkoutForm();
           return true;
         },
         restore: () => {
@@ -674,7 +611,6 @@ function renderWorkoutHistory() {
         },
       });
     });
-
     workoutHistoryList.append(card);
   });
 }
@@ -702,16 +638,10 @@ function persistExerciseDraft() {
 function resetExerciseForm({ preserveDraft = false, preserveStatus = false } = {}) {
   exerciseForm.reset();
   exerciseIdInput.value = "";
-  exerciseFormTitle.textContent = "Упражнение";
+  exerciseFormTitle.textContent = "Новое упражнение";
   exerciseTypeInput.value = "strength";
-
-  if (!preserveDraft) {
-    clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
-  }
-
-  if (!preserveStatus) {
-    setDraftStatus(exerciseDraftStatus, "");
-  }
+  if (!preserveDraft) clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
+  if (!preserveStatus) setDraftStatus(exerciseDraftStatus, "");
 }
 
 function fillExerciseForm(exercise) {
@@ -719,7 +649,7 @@ function fillExerciseForm(exercise) {
   exerciseNameInput.value = exercise.name ?? "";
   exerciseTypeInput.value = exercise.type ?? "strength";
   exerciseDescriptionInput.value = exercise.description ?? "";
-  exerciseFormTitle.textContent = exercise.id ? "Редактирование упражнения" : "Упражнение";
+  exerciseFormTitle.textContent = exercise.id ? "Редактирование упражнения" : "Новое упражнение";
 }
 
 function restoreExerciseDraft() {
@@ -728,7 +658,6 @@ function restoreExerciseDraft() {
     resetExerciseForm({ preserveDraft: true, preserveStatus: true });
     return;
   }
-
   fillExerciseForm(draft);
   if (draft.updatedAt) {
     setDraftStatus(exerciseDraftStatus, `Черновик упражнения восстановлен: ${formatDate(draft.updatedAt)}`);
@@ -736,7 +665,7 @@ function restoreExerciseDraft() {
 }
 
 function renderExerciseHistory() {
-  const exercises = getActiveExercises().sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  const exercises = getActiveExercises().sort((a, b) => a.name.localeCompare(b.name, "ru"));
   exerciseHistoryList.innerHTML = "";
   exerciseHistoryCount.textContent = `${exercises.length} ${pluralize(exercises.length, "запись", "записи", "записей")}`;
   exerciseEmptyState.hidden = exercises.length > 0;
@@ -745,48 +674,35 @@ function renderExerciseHistory() {
     const card = document.createElement("article");
     card.className = "history-card";
     card.innerHTML = `
-      <div class="history-row">
+      <div class="history-topline">
         <div>
-          <span class="pill">${exerciseTypeLabel(exercise.type)}</span>
           <h4 class="history-title">${escapeHtml(exercise.name)}</h4>
+          <p class="history-meta">${exerciseTypeLabel(exercise.type)}</p>
         </div>
+        <button class="mini-icon-button edit-exercise-button" type="button" aria-label="Редактировать">✎</button>
       </div>
-      <p class="history-summary">${escapeHtml(exercise.description || "Без описания")}</p>
       <div class="history-card-actions">
-        <button class="secondary-button edit-exercise-button" type="button">Редактировать</button>
         <button class="ghost-button delete-exercise-button" type="button">Скрыть</button>
       </div>
     `;
-
     card.querySelector(".edit-exercise-button").addEventListener("click", () => {
       fillExerciseForm(exercise);
       setDraftStatus(exerciseDraftStatus, "");
       persistExerciseDraft();
-      switchView("exercises");
+      openFormView("exercises");
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
-
     card.querySelector(".delete-exercise-button").addEventListener("click", () => {
-      if (!window.confirm("Скрыть упражнение из справочника? В старых тренировках оно останется.")) {
-        return;
-      }
-
+      if (!window.confirm("Скрыть упражнение из справочника? В старых тренировках оно останется.")) return;
       const previous = getExercises();
-      const next = previous.map((item) => (
-        item.id === exercise.id ? { ...item, archived: true } : item
-      ));
-
+      const next = previous.map((item) => item.id === exercise.id ? { ...item, archived: true } : item);
       runDeleteWithUndo({
         message: "Упражнение скрыто из справочника.",
         apply: () => {
-          if (!setExercises(next)) {
-            return false;
-          }
+          if (!setExercises(next)) return false;
           renderExerciseHistory();
           refreshWorkoutExerciseCards();
-          if (exerciseIdInput.value === exercise.id) {
-            resetExerciseForm();
-          }
+          if (exerciseIdInput.value === exercise.id) resetExerciseForm();
           return true;
         },
         restore: () => {
@@ -796,7 +712,6 @@ function renderExerciseHistory() {
         },
       });
     });
-
     exerciseHistoryList.append(card);
   });
 }
@@ -822,20 +737,9 @@ function buildMeasurementDraft() {
 function persistMeasurementDraft() {
   const draft = buildMeasurementDraft();
   const hasMeaning = Boolean(
-    draft.id ||
-    draft.title ||
-    draft.date ||
-    draft.weight ||
-    draft.bodyFat ||
-    draft.chest ||
-    draft.waist ||
-    draft.belly ||
-    draft.hips ||
-    draft.arm ||
-    draft.leg ||
-    draft.note
+    draft.id || draft.title || draft.date || draft.weight || draft.bodyFat || draft.chest ||
+    draft.waist || draft.belly || draft.hips || draft.arm || draft.leg || draft.note
   );
-
   if (hasMeaning) {
     saveObject(storageKeys.measurementDraft, draft, "сохранить черновик замера");
   } else {
@@ -843,19 +747,48 @@ function persistMeasurementDraft() {
   }
 }
 
+function measurementNumericFields() {
+  return [
+    measurementWeightInput,
+    measurementBodyFatInput,
+    measurementChestInput,
+    measurementWaistInput,
+    measurementBellyInput,
+    measurementHipsInput,
+    measurementArmInput,
+    measurementLegInput,
+  ];
+}
+
+function getLastMeasurement() {
+  return getMeasurements().sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
+}
+
+function applyMeasurementPlaceholders() {
+  const last = getLastMeasurement();
+  const pairs = [
+    [measurementWeightInput, last?.weight],
+    [measurementBodyFatInput, last?.bodyFat],
+    [measurementChestInput, last?.chest],
+    [measurementWaistInput, last?.waist],
+    [measurementBellyInput, last?.belly],
+    [measurementHipsInput, last?.hips],
+    [measurementArmInput, last?.arm],
+    [measurementLegInput, last?.leg],
+  ];
+  pairs.forEach(([input, value]) => {
+    input.placeholder = value ? String(value) : input.defaultPlaceholder || input.placeholder;
+  });
+}
+
 function resetMeasurementForm({ preserveDraft = false, preserveStatus = false } = {}) {
   measurementForm.reset();
   measurementIdInput.value = "";
-  measurementFormTitle.textContent = "Замер";
+  measurementFormTitle.textContent = "Новый замер";
   measurementDateInput.value = new Date().toISOString().slice(0, 10);
-
-  if (!preserveDraft) {
-    clearObject(storageKeys.measurementDraft, "очистить черновик замера");
-  }
-
-  if (!preserveStatus) {
-    setDraftStatus(measurementDraftStatus, "");
-  }
+  if (!preserveDraft) clearObject(storageKeys.measurementDraft, "очистить черновик замера");
+  if (!preserveStatus) setDraftStatus(measurementDraftStatus, "");
+  applyMeasurementPlaceholders();
 }
 
 function fillMeasurementForm(item) {
@@ -871,7 +804,8 @@ function fillMeasurementForm(item) {
   measurementArmInput.value = item.arm ?? "";
   measurementLegInput.value = item.leg ?? "";
   measurementNoteInput.value = item.note ?? "";
-  measurementFormTitle.textContent = item.id ? "Редактирование замера" : "Замер";
+  measurementFormTitle.textContent = item.id ? "Редактирование замера" : "Новый замер";
+  applyMeasurementPlaceholders();
 }
 
 function restoreMeasurementDraft() {
@@ -880,7 +814,6 @@ function restoreMeasurementDraft() {
     resetMeasurementForm({ preserveDraft: true, preserveStatus: true });
     return;
   }
-
   fillMeasurementForm(draft);
   if (draft.updatedAt) {
     setDraftStatus(measurementDraftStatus, `Черновик замера восстановлен: ${formatDate(draft.updatedAt)}`);
@@ -892,10 +825,11 @@ function measurementListTitle(item) {
 }
 
 function renderMeasurementHistory() {
-  const items = getMeasurements().sort((left, right) => new Date(right.date) - new Date(left.date));
+  const items = getMeasurements().sort((a, b) => new Date(b.date) - new Date(a.date));
   measurementHistoryList.innerHTML = "";
   measurementHistoryCount.textContent = `${items.length} ${pluralize(items.length, "запись", "записи", "записей")}`;
   measurementEmptyState.hidden = items.length > 0;
+  applyMeasurementPlaceholders();
 
   items.forEach((item) => {
     const details = [
@@ -903,50 +837,38 @@ function renderMeasurementHistory() {
       item.bodyFat ? `Жир: ${item.bodyFat}%` : null,
       item.waist ? `Талия: ${item.waist}` : null,
     ].filter(Boolean).join(" · ") || "Без дополнительных полей";
-
     const card = document.createElement("article");
     card.className = "history-card";
     card.innerHTML = `
-      <div class="history-row">
+      <div class="history-topline">
         <div>
-          <span class="pill">Замер</span>
           <h4 class="history-title">${escapeHtml(measurementListTitle(item))}</h4>
+          <p class="history-meta">${formatDateOnly(item.date)}</p>
         </div>
+        <button class="mini-icon-button edit-measurement-button" type="button" aria-label="Редактировать">✎</button>
       </div>
-      <p class="history-meta">${formatDateOnly(item.date)}</p>
       <p class="history-summary">${escapeHtml(details)}</p>
       <div class="history-card-actions">
-        <button class="secondary-button edit-measurement-button" type="button">Редактировать</button>
         <button class="ghost-button delete-measurement-button" type="button">Удалить</button>
       </div>
     `;
-
     card.querySelector(".edit-measurement-button").addEventListener("click", () => {
       fillMeasurementForm(item);
       setDraftStatus(measurementDraftStatus, "");
       persistMeasurementDraft();
-      switchView("measurements");
+      openFormView("measurements");
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
-
     card.querySelector(".delete-measurement-button").addEventListener("click", () => {
-      if (!window.confirm("Удалить этот замер?")) {
-        return;
-      }
-
+      if (!window.confirm("Удалить этот замер?")) return;
       const previous = getMeasurements();
       const next = previous.filter((entry) => entry.id !== item.id);
-
       runDeleteWithUndo({
         message: "Замер удален.",
         apply: () => {
-          if (!setMeasurements(next)) {
-            return false;
-          }
+          if (!setMeasurements(next)) return false;
           renderMeasurementHistory();
-          if (measurementIdInput.value === item.id) {
-            resetMeasurementForm();
-          }
+          if (measurementIdInput.value === item.id) resetMeasurementForm();
           return true;
         },
         restore: () => {
@@ -955,44 +877,8 @@ function renderMeasurementHistory() {
         },
       });
     });
-
     measurementHistoryList.append(card);
   });
-}
-
-function saveLastView(viewName) {
-  saveObject(storageKeys.lastView, viewName, "сохранить последний раздел");
-}
-
-function getLastView() {
-  const value = loadObject(storageKeys.lastView);
-  return typeof value === "string" && views[value] ? value : "workouts";
-}
-
-function switchView(viewName, options = {}) {
-  const previousView = getActiveViewName();
-
-  if (
-    viewName === "exercises" &&
-    previousView === "workouts" &&
-    !options.skipWorkoutExerciseRedirect &&
-    !exercisePickerHint.hidden &&
-    hasMeaningfulWorkoutInProgress() &&
-    !loadPendingExerciseContext()
-  ) {
-    startExerciseCreationFromWorkout();
-    return;
-  }
-
-  Object.entries(views).forEach(([key, element]) => {
-    element.classList.toggle("is-active", key === viewName);
-  });
-
-  navItems.forEach((item) => {
-    item.classList.toggle("is-active", item.dataset.view === viewName);
-  });
-
-  saveLastView(viewName);
 }
 
 function normalizeExerciseName(value) {
@@ -1001,7 +887,7 @@ function normalizeExerciseName(value) {
 
 function collectAllData() {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     workouts: getWorkouts(),
     exercises: getExercises(),
@@ -1015,37 +901,17 @@ function collectAllData() {
 }
 
 function applyImportedData(payload) {
-  const workouts = Array.isArray(payload.workouts) ? payload.workouts : [];
-  const exercises = Array.isArray(payload.exercises) ? migrateExercises(payload.exercises) : [];
-  const measurements = Array.isArray(payload.measurements) ? payload.measurements : [];
-  const drafts = payload.drafts && typeof payload.drafts === "object" ? payload.drafts : {};
-
   suppressSaveErrors = true;
   try {
     const writes = [
-      saveList(storageKeys.workouts, workouts, "импортировать тренировки"),
-      saveList(storageKeys.exercises, exercises, "импортировать упражнения"),
-      saveList(storageKeys.measurements, measurements, "импортировать замеры"),
+      saveList(storageKeys.workouts, Array.isArray(payload.workouts) ? payload.workouts : [], "импортировать тренировки"),
+      saveList(storageKeys.exercises, Array.isArray(payload.exercises) ? payload.exercises : [], "импортировать упражнения"),
+      saveList(storageKeys.measurements, Array.isArray(payload.measurements) ? payload.measurements : [], "импортировать замеры"),
     ];
-
-    if (drafts.workout) {
-      writes.push(saveObject(storageKeys.workoutDraft, drafts.workout, "импортировать черновик тренировки"));
-    } else {
-      writes.push(clearObject(storageKeys.workoutDraft, "очистить черновик тренировки"));
-    }
-
-    if (drafts.exercise) {
-      writes.push(saveObject(storageKeys.exerciseDraft, drafts.exercise, "импортировать черновик упражнения"));
-    } else {
-      writes.push(clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения"));
-    }
-
-    if (drafts.measurement) {
-      writes.push(saveObject(storageKeys.measurementDraft, drafts.measurement, "импортировать черновик замера"));
-    } else {
-      writes.push(clearObject(storageKeys.measurementDraft, "очистить черновик замера"));
-    }
-
+    const drafts = payload.drafts && typeof payload.drafts === "object" ? payload.drafts : {};
+    writes.push(drafts.workout ? saveObject(storageKeys.workoutDraft, drafts.workout, "импортировать черновик тренировки") : clearObject(storageKeys.workoutDraft, "очистить черновик тренировки"));
+    writes.push(drafts.exercise ? saveObject(storageKeys.exerciseDraft, drafts.exercise, "импортировать черновик упражнения") : clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения"));
+    writes.push(drafts.measurement ? saveObject(storageKeys.measurementDraft, drafts.measurement, "импортировать черновик замера") : clearObject(storageKeys.measurementDraft, "очистить черновик замера"));
     return writes.every(Boolean);
   } finally {
     suppressSaveErrors = false;
@@ -1053,13 +919,11 @@ function applyImportedData(payload) {
 }
 
 function exportData() {
-  const payload = collectAllData();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(collectAllData(), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const datePart = new Date().toISOString().slice(0, 10);
   link.href = url;
-  link.download = `workout-journal-backup-${datePart}.json`;
+  link.download = `workout-journal-backup-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -1068,38 +932,24 @@ function exportData() {
 }
 
 function clearAllData() {
-  if (!window.confirm("Очистить все тренировки, упражнения, замеры и черновики на этом устройстве?")) {
-    return;
-  }
-
+  if (!window.confirm("Очистить все тренировки, упражнения, замеры и черновики на этом устройстве?")) return;
   const snapshot = collectAllData();
-  const keys = [
-    storageKeys.workouts,
-    storageKeys.exercises,
-    storageKeys.measurements,
-    storageKeys.workoutDraft,
-    storageKeys.exerciseDraft,
-    storageKeys.measurementDraft,
-  ];
-
   suppressSaveErrors = true;
   try {
-    keys.forEach((key) => localStorage.removeItem(key));
+    Object.values(storageKeys).forEach((key) => localStorage.removeItem(key));
   } catch (error) {
     suppressSaveErrors = false;
     reportStorageError("очистить данные", error);
     return;
   }
   suppressSaveErrors = false;
-
   resetWorkoutForm();
   resetExerciseForm();
   resetMeasurementForm();
-  renderExerciseHistory();
   renderWorkoutHistory();
+  renderExerciseHistory();
   renderMeasurementHistory();
   refreshWorkoutExerciseCards();
-
   showToast("Все локальные данные очищены.", {
     duration: 5000,
     actionLabel: "Отменить",
@@ -1108,8 +958,8 @@ function clearAllData() {
       restoreWorkoutDraft();
       restoreExerciseDraft();
       restoreMeasurementDraft();
-      renderExerciseHistory();
       renderWorkoutHistory();
+      renderExerciseHistory();
       renderMeasurementHistory();
       refreshWorkoutExerciseCards();
     },
@@ -1117,33 +967,21 @@ function clearAllData() {
 }
 
 function importDataFromFile(file) {
-  if (!file) {
-    return;
-  }
-
+  if (!file) return;
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     try {
       const payload = JSON.parse(String(reader.result));
-      if (!payload || typeof payload !== "object") {
-        throw new Error("Invalid payload");
-      }
-
-      if (!window.confirm("Импорт заменит текущие локальные данные на этом устройстве. Продолжить?")) {
-        return;
-      }
-
-      const success = applyImportedData(payload);
-      if (!success) {
+      if (!window.confirm("Импорт заменит текущие локальные данные на этом устройстве. Продолжить?")) return;
+      if (!applyImportedData(payload)) {
         showToast("Импорт не завершен. Проверь файл и место в браузере.");
         return;
       }
-
       restoreWorkoutDraft();
       restoreExerciseDraft();
       restoreMeasurementDraft();
-      renderExerciseHistory();
       renderWorkoutHistory();
+      renderExerciseHistory();
       renderMeasurementHistory();
       refreshWorkoutExerciseCards();
       showToast("Данные успешно импортированы.");
@@ -1154,20 +992,87 @@ function importDataFromFile(file) {
       importDataInput.value = "";
     }
   });
-
   reader.addEventListener("error", () => {
     showToast("Не удалось прочитать файл.");
     importDataInput.value = "";
   });
-
   reader.readAsText(file);
 }
 
+function startExerciseCreationFromWorkout() {
+  const workoutType = workoutTypeInput.value;
+  savePendingExerciseContext({
+    workoutType,
+    targetCardIndex: findPendingWorkoutCardIndex(),
+    createdAt: new Date().toISOString(),
+  });
+  openFormView("exercises");
+  if (!hasMeaningfulExerciseDraft()) {
+    resetExerciseForm({ preserveDraft: false, preserveStatus: true });
+    exerciseTypeInput.value = workoutType;
+  }
+  setDraftStatus(
+    exerciseDraftStatus,
+    `Создай ${workoutTypeLabel(workoutType).toLowerCase()} упражнение. После сохранения вернем его в текущую тренировку.`
+  );
+  persistExerciseDraft();
+  exerciseNameInput.focus();
+}
+
+function openWorkoutForm({ editing = false } = {}) {
+  if (!editing && !loadObject(storageKeys.workoutDraft)) {
+    resetWorkoutForm({ preserveDraft: true, preserveStatus: true });
+  }
+  openFormView("workouts");
+}
+
+function openExerciseForm() {
+  if (!loadObject(storageKeys.exerciseDraft)) {
+    resetExerciseForm({ preserveDraft: true, preserveStatus: true });
+  }
+  openFormView("exercises");
+}
+
+function openMeasurementForm() {
+  if (!loadObject(storageKeys.measurementDraft)) {
+    resetMeasurementForm({ preserveDraft: true, preserveStatus: true });
+  }
+  openFormView("measurements");
+}
+
 navItems.forEach((item) => {
-  item.addEventListener("click", () => switchView(item.dataset.view));
+  item.addEventListener("click", () => {
+    openListView(item.dataset.view);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
 });
 
-window.addEventListener("resize", normalizeNavLabels);
+backButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const viewName = button.dataset.back;
+    clearPendingExerciseContext();
+    openListView(viewName);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+});
+
+openWorkoutFormButton.addEventListener("click", () => {
+  resetWorkoutForm({ preserveDraft: true, preserveStatus: true });
+  openWorkoutForm();
+  workoutTitleInput.focus();
+});
+
+openExerciseFormButton.addEventListener("click", () => {
+  resetExerciseForm({ preserveDraft: true, preserveStatus: true });
+  openExerciseForm();
+  exerciseNameInput.focus();
+});
+
+openMeasurementFormButton.addEventListener("click", () => {
+  resetMeasurementForm({ preserveDraft: true, preserveStatus: true });
+  openMeasurementForm();
+  measurementTitleInput.focus();
+});
 
 workoutTypeInput.addEventListener("change", () => {
   refreshWorkoutExerciseCards();
@@ -1201,17 +1106,11 @@ workoutTypeInput.addEventListener("change", () => {
   input.addEventListener("change", persistMeasurementDraft);
 });
 
-openWorkoutFormButton.addEventListener("click", () => {
-  switchView("workouts");
-  workoutTitleInput.focus();
-});
-
+addWorkoutExerciseButton.addEventListener("click", () => createWorkoutExerciseCard());
+createExerciseFromWorkoutButton.addEventListener("click", startExerciseCreationFromWorkout);
 resetWorkoutButton.addEventListener("click", () => resetWorkoutForm());
 resetExerciseButton.addEventListener("click", () => resetExerciseForm());
 resetMeasurementButton.addEventListener("click", () => resetMeasurementForm());
-addWorkoutExerciseButton.addEventListener("click", () => createWorkoutExerciseCard());
-createExerciseFromWorkoutButton.addEventListener("click", () => startExerciseCreationFromWorkout());
-
 exportDataButton.addEventListener("click", exportData);
 importDataButton.addEventListener("click", () => importDataInput.click());
 importDataInput.addEventListener("change", () => importDataFromFile(importDataInput.files?.[0]));
@@ -1219,31 +1118,25 @@ clearAllDataButton.addEventListener("click", clearAllData);
 
 workoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
-
   const entries = collectWorkoutExercises().filter((entry) => entry.exerciseId);
   if (!entries.length) {
     alert("Добавь хотя бы одно упражнение в тренировку.");
     return;
   }
-
   const invalidEntry = entries.find((entry) => {
     const exercise = getExerciseById(entry.exerciseId);
     return !exercise || exercise.type !== workoutTypeInput.value || exercise.archived;
   });
-
   if (invalidEntry) {
-    alert("В тренировке есть упражнение неподходящего типа или скрытое упражнение. Проверь выбранные упражнения.");
+    alert("В тренировке есть упражнение неподходящего типа или скрытое упражнение.");
     return;
   }
-
   const startTime = new Date(workoutStartTimeInput.value);
   const endTime = new Date(workoutEndTimeInput.value);
-
   if (Number.isNaN(startTime.valueOf()) || Number.isNaN(endTime.valueOf())) {
     alert("Проверь дату и время тренировки.");
     return;
   }
-
   if (endTime < startTime) {
     alert("Окончание тренировки не может быть раньше начала.");
     return;
@@ -1266,45 +1159,28 @@ workoutForm.addEventListener("submit", (event) => {
 
   const workouts = getWorkouts();
   const existingIndex = workouts.findIndex((item) => item.id === workout.id);
-  if (existingIndex >= 0) {
-    workouts[existingIndex] = workout;
-  } else {
-    workouts.push(workout);
-  }
+  if (existingIndex >= 0) workouts[existingIndex] = workout;
+  else workouts.push(workout);
 
-  if (!setWorkouts(workouts)) {
-    return;
-  }
-
+  if (!setWorkouts(workouts)) return;
   clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   resetWorkoutForm();
   renderWorkoutHistory();
+  openListView("workouts");
   showToast("Тренировка сохранена.");
 });
 
 exerciseForm.addEventListener("submit", (event) => {
   event.preventDefault();
-
   const name = exerciseNameInput.value.trim();
   const normalizedName = normalizeExerciseName(name);
   const exercises = getExercises();
-  const duplicate = exercises.find((item) => (
-    item.id !== exerciseIdInput.value &&
-    normalizeExerciseName(item.name) === normalizedName &&
-    !item.archived
-  ));
-
+  const duplicate = exercises.find((item) => item.id !== exerciseIdInput.value && normalizeExerciseName(item.name) === normalizedName && !item.archived);
   if (duplicate) {
     alert("Упражнение с таким названием уже есть в справочнике.");
     return;
   }
-
-  const archivedDuplicate = exercises.find((item) => (
-    item.id !== exerciseIdInput.value &&
-    normalizeExerciseName(item.name) === normalizedName &&
-    item.archived
-  ));
-
+  const archivedDuplicate = exercises.find((item) => item.id !== exerciseIdInput.value && normalizeExerciseName(item.name) === normalizedName && item.archived);
   if (archivedDuplicate && !window.confirm("Такое упражнение уже было скрыто. Сохранить новое заново?")) {
     return;
   }
@@ -1318,45 +1194,43 @@ exerciseForm.addEventListener("submit", (event) => {
   };
 
   const existingIndex = exercises.findIndex((item) => item.id === exercise.id);
-  if (existingIndex >= 0) {
-    exercises[existingIndex] = exercise;
-  } else {
-    exercises.push(exercise);
-  }
+  if (existingIndex >= 0) exercises[existingIndex] = exercise;
+  else exercises.push(exercise);
+  if (!setExercises(exercises)) return;
 
-  if (!setExercises(exercises)) {
-    return;
-  }
-
-  const pendingExerciseContext = loadPendingExerciseContext();
+  const pendingContext = loadPendingExerciseContext();
   clearObject(storageKeys.exerciseDraft, "очистить черновик упражнения");
   resetExerciseForm();
   renderExerciseHistory();
   refreshWorkoutExerciseCards();
 
-  if (pendingExerciseContext && pendingExerciseContext.workoutType === exercise.type) {
-    applyExerciseToWorkoutCard(pendingExerciseContext.targetCardIndex ?? 0, exercise.id);
+  if (pendingContext && pendingContext.workoutType === exercise.type) {
+    applyExerciseToWorkoutCard(pendingContext.targetCardIndex ?? 0, exercise.id);
     clearPendingExerciseContext();
-    switchView("workouts", { skipWorkoutExerciseRedirect: true });
+    openFormView("workouts");
     showToast("Упражнение сохранено и добавлено в текущую тренировку.");
-    window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
 
-  if (pendingExerciseContext) {
-    clearPendingExerciseContext();
-    showToast("Упражнение сохранено. Оно не добавлено в тренировку, потому что тип не совпадает.");
-    return;
-  }
-
+  clearPendingExerciseContext();
+  openListView("exercises");
   showToast("Упражнение сохранено.");
 });
 
 measurementForm.addEventListener("submit", (event) => {
   event.preventDefault();
-
   if (!measurementDateInput.value) {
     alert("Укажи дату замера.");
+    return;
+  }
+  const bodyFat = measurementBodyFatInput.value.trim();
+  if (bodyFat && (Number(bodyFat) < 0 || Number(bodyFat) > 100)) {
+    alert("Процент жира должен быть в диапазоне от 0 до 100.");
+    return;
+  }
+  const hasAnyNumeric = measurementNumericFields().some((input) => input.value.trim() !== "");
+  if (!hasAnyNumeric) {
+    alert("Для замера нужно заполнить хотя бы одно числовое поле.");
     return;
   }
 
@@ -1365,7 +1239,7 @@ measurementForm.addEventListener("submit", (event) => {
     title: measurementTitleInput.value.trim(),
     date: measurementDateInput.value,
     weight: measurementWeightInput.value.trim(),
-    bodyFat: measurementBodyFatInput.value.trim(),
+    bodyFat: bodyFat,
     chest: measurementChestInput.value.trim(),
     waist: measurementWaistInput.value.trim(),
     belly: measurementBellyInput.value.trim(),
@@ -1375,31 +1249,29 @@ measurementForm.addEventListener("submit", (event) => {
     note: measurementNoteInput.value.trim(),
   };
 
-  const measurements = getMeasurements();
-  const existingIndex = measurements.findIndex((item) => item.id === measurement.id);
-  if (existingIndex >= 0) {
-    measurements[existingIndex] = measurement;
-  } else {
-    measurements.push(measurement);
-  }
-
-  if (!setMeasurements(measurements)) {
-    return;
-  }
+  const items = getMeasurements();
+  const existingIndex = items.findIndex((item) => item.id === measurement.id);
+  if (existingIndex >= 0) items[existingIndex] = measurement;
+  else items.push(measurement);
+  if (!setMeasurements(items)) return;
 
   clearObject(storageKeys.measurementDraft, "очистить черновик замера");
   resetMeasurementForm();
   renderMeasurementHistory();
+  openListView("measurements");
   showToast("Замер сохранен.");
 });
 
-setExercises(migrateExercises(getExercises()));
+measurementNumericFields().forEach((input) => {
+  input.defaultPlaceholder = input.placeholder;
+});
+
 restoreWorkoutDraft();
 restoreExerciseDraft();
 restoreMeasurementDraft();
-normalizeNavLabels();
-renderExerciseHistory();
 renderWorkoutHistory();
+renderExerciseHistory();
 renderMeasurementHistory();
 refreshWorkoutExerciseCards();
-switchView(getLastView());
+showView(getLastView());
+showSubview(activeView, viewModes[activeView]);
