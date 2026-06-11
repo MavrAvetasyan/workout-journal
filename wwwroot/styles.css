@@ -625,9 +625,11 @@ button {
   .bottom-nav {
     width: calc(100% - 10px);
     bottom: 6px;
+    left: 50%;
     gap: 4px;
     padding: 6px;
     border-radius: 18px;
+    grid-template-columns: 1.18fr 1.18fr 1fr 0.64fr;
   }
 
   .nav-item {
@@ -656,6 +658,10 @@ button {
 }
 
 @media (max-width: 360px) {
+  .bottom-nav {
+    grid-template-columns: 1.14fr 1.14fr 0.96fr 0.58fr;
+  }
+
   .nav-label {
     font-size: 0.6rem;
   }
