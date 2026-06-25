@@ -91,6 +91,13 @@ let toastTimer = null;
 let pendingDelete = null;
 let suppressSaveErrors = false;
 
+const workoutStatuses = {
+  planned: "planned",
+  active: "active",
+  completed: "completed",
+  cancelled: "cancelled",
+};
+
 function showToast(message, { duration = 3200, actionLabel = "", onAction = null } = {}) {
   toast.hidden = false;
   toast.innerHTML = "";
@@ -222,6 +229,20 @@ function workoutTypeLabel(type) {
   return type === "cardio" ? "Кардио" : "Силовая";
 }
 
+function workoutStatusLabel(status) {
+  switch (status) {
+    case workoutStatuses.planned:
+      return "Запланирована";
+    case workoutStatuses.active:
+      return "Активна";
+    case workoutStatuses.cancelled:
+      return "Отменена";
+    case workoutStatuses.completed:
+    default:
+      return "Завершена";
+  }
+}
+
 function exerciseTypeLabel(type) {
   return type === "cardio" ? "Кардио" : "Силовое";
 }
@@ -243,12 +264,67 @@ function pluralize(count, one, few, many) {
   return many;
 }
 
+function normalizeWorkoutMetricValue(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeWorkoutPhase(item = {}) {
+  return {
+    sets: normalizeWorkoutMetricValue(item.sets),
+    weight: normalizeWorkoutMetricValue(item.weight),
+    reps: normalizeWorkoutMetricValue(item.reps),
+    note: item.note?.trim?.() ?? item.note ?? "",
+  };
+}
+
+function normalizeWorkoutEntry(item = {}) {
+  const plan = item.plan ? normalizeWorkoutPhase(item.plan) : null;
+  const fact = item.fact
+    ? normalizeWorkoutPhase(item.fact)
+    : item.actual
+      ? normalizeWorkoutPhase(item.actual)
+      : (item.sets !== undefined || item.weight !== undefined || item.reps !== undefined || item.note !== undefined)
+        ? normalizeWorkoutPhase(item)
+        : null;
+
+  return {
+    id: item.id ?? uid(),
+    exerciseId: item.exerciseId ?? "",
+    status: typeof item.status === "string" ? item.status : "pending",
+    plan,
+    fact,
+  };
+}
+
+function normalizeWorkout(item = {}) {
+  const rawStatus = typeof item.status === "string" ? item.status : "";
+  const status = Object.values(workoutStatuses).includes(rawStatus)
+    ? rawStatus
+    : item.startTime || item.endTime || item.completedAt
+      ? workoutStatuses.completed
+      : workoutStatuses.planned;
+
+  return {
+    id: item.id ?? uid(),
+    title: item.title?.trim?.() ?? item.title ?? "",
+    type: item.type === "cardio" ? "cardio" : "strength",
+    status,
+    startTime: item.startTime ?? "",
+    endTime: item.endTime ?? "",
+    createdAt: item.createdAt ?? item.startTime ?? new Date().toISOString(),
+    updatedAt: item.updatedAt ?? new Date().toISOString(),
+    exercises: Array.isArray(item.exercises) ? item.exercises.map(normalizeWorkoutEntry) : [],
+  };
+}
+
 function getWorkouts() {
-  return loadList(storageKeys.workouts);
+  return loadList(storageKeys.workouts).map(normalizeWorkout);
 }
 
 function setWorkouts(items) {
-  return saveList(storageKeys.workouts, items, "сохранить тренировки");
+  return saveList(storageKeys.workouts, items.map(normalizeWorkout), "сохранить тренировки");
 }
 
 function getExercises() {
@@ -276,13 +352,29 @@ function setMeasurements(items) {
 }
 
 function normalizeWorkoutExercise(item = {}) {
+  const source = item.plan ?? item.fact ?? item.actual ?? item;
   return {
     exerciseId: item.exerciseId ?? "",
-    sets: item.sets ?? "",
-    weight: item.weight ?? "",
-    reps: item.reps ?? "",
-    note: item.note ?? "",
+    sets: source.sets ?? "",
+    weight: source.weight ?? "",
+    reps: source.reps ?? "",
+    note: source.note ?? "",
   };
+}
+
+function workoutStatusSortOrder(status) {
+  switch (status) {
+    case workoutStatuses.active:
+      return 0;
+    case workoutStatuses.planned:
+      return 1;
+    case workoutStatuses.completed:
+      return 2;
+    case workoutStatuses.cancelled:
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 function hasMeaningfulWorkoutInProgress() {
@@ -539,7 +631,15 @@ function restoreWorkoutDraft() {
 }
 
 function workoutListTitle(workout) {
-  return workout.title?.trim() || `${workoutTypeLabel(workout.type)} · ${formatDateOnly(workout.startTime)}`;
+  if (workout.title?.trim()) {
+    return workout.title.trim();
+  }
+
+  if (workout.startTime) {
+    return `${workoutTypeLabel(workout.type)} · ${formatDateOnly(workout.startTime)}`;
+  }
+
+  return workoutTypeLabel(workout.type);
 }
 
 function runDeleteWithUndo(config) {
@@ -557,7 +657,11 @@ function runDeleteWithUndo(config) {
 }
 
 function renderWorkoutHistory() {
-  const workouts = getWorkouts().sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+  const workouts = getWorkouts().sort((a, b) => {
+    const statusOrder = workoutStatusSortOrder(a.status) - workoutStatusSortOrder(b.status);
+    if (statusOrder !== 0) return statusOrder;
+    return new Date(b.startTime || b.createdAt || 0) - new Date(a.startTime || a.createdAt || 0);
+  });
   workoutHistoryList.innerHTML = "";
   workoutHistoryCount.textContent = `${workouts.length} ${pluralize(workouts.length, "запись", "записи", "записей")}`;
   workoutEmptyState.hidden = workouts.length > 0;
@@ -572,9 +676,9 @@ function renderWorkoutHistory() {
       <div class="history-topline">
         <div>
           <h4 class="history-title">${escapeHtml(workoutListTitle(workout))}</h4>
-          <p class="history-meta">${formatDate(workout.startTime)}</p>
+          <p class="history-meta">${workout.startTime ? formatDate(workout.startTime) : "Без даты"} · ${workoutTypeLabel(workout.type)} · ${workoutStatusLabel(workout.status)}</p>
         </div>
-        <span class="pill">${workoutTypeLabel(workout.type)}</span>
+        <span class="pill">${workoutStatusLabel(workout.status)}</span>
       </div>
       <p class="history-summary">${escapeHtml(summary)}</p>
       <div class="history-card-actions">
@@ -585,8 +689,8 @@ function renderWorkoutHistory() {
     card.querySelector(".edit-workout-button").addEventListener("click", () => {
       fillWorkoutForm({
         ...workout,
-        startTime: toLocalInputValue(new Date(workout.startTime)),
-        endTime: toLocalInputValue(new Date(workout.endTime)),
+        startTime: workout.startTime ? toLocalInputValue(new Date(workout.startTime)) : "",
+        endTime: workout.endTime ? toLocalInputValue(new Date(workout.endTime)) : "",
       }, { editing: true });
       setDraftStatus(workoutDraftStatus, "");
       persistWorkoutDraft();
@@ -1146,14 +1250,22 @@ workoutForm.addEventListener("submit", (event) => {
     id: workoutIdInput.value || uid(),
     title: workoutTitleInput.value.trim(),
     type: workoutTypeInput.value,
+    status: getWorkouts().find((item) => item.id === workoutIdInput.value)?.status ?? workoutStatuses.completed,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
+    createdAt: getWorkouts().find((item) => item.id === workoutIdInput.value)?.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     exercises: entries.map((entry) => ({
+      id: uid(),
       exerciseId: entry.exerciseId,
-      sets: entry.sets === "" ? null : Number(entry.sets),
-      weight: entry.weight === "" ? null : Number(entry.weight),
-      reps: entry.reps === "" ? null : Number(entry.reps),
-      note: entry.note,
+      status: "done",
+      plan: null,
+      fact: {
+        sets: entry.sets === "" ? null : Number(entry.sets),
+        weight: entry.weight === "" ? null : Number(entry.weight),
+        reps: entry.reps === "" ? null : Number(entry.reps),
+        note: entry.note,
+      },
     })),
   };
 
