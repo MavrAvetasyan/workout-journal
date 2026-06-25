@@ -2,3 +2,7 @@ bin/
 obj/
 tools/*.log
 tools/cloudflared.exe
+.venv/
+__pycache__/
+*.pyc
+backend/data/

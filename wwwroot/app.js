@@ -16,6 +16,19 @@ const views = {
   more: document.querySelector("#view-more"),
 };
 
+const authShell = document.querySelector("#auth-shell");
+const appShell = document.querySelector("#app-shell");
+const bottomNav = document.querySelector("#bottom-nav");
+const authForm = document.querySelector("#auth-form");
+const authEmailInput = document.querySelector("#auth-email");
+const authPasswordInput = document.querySelector("#auth-password");
+const authStatus = document.querySelector("#auth-status");
+const authSubmitButton = document.querySelector("#auth-submit-button");
+const authToggleButton = document.querySelector("#auth-toggle-button");
+const accountEmail = document.querySelector("#account-email");
+const syncStatusText = document.querySelector("#sync-status-text");
+let logoutButton = document.querySelector("#logout-button");
+
 const navItems = [...document.querySelectorAll(".nav-item")];
 const body = document.body;
 const toast = document.querySelector("#toast");
@@ -90,6 +103,21 @@ let activeView = "workouts";
 let toastTimer = null;
 let pendingDelete = null;
 let suppressSaveErrors = false;
+let isRegisterMode = false;
+let isAuthenticated = false;
+let serverSyncTimer = null;
+let isApplyingServerState = false;
+
+const authKeys = {
+  token: "training-journal-auth-token-v1",
+  user: "training-journal-auth-user-v1",
+};
+
+const syncEntityKeys = new Set([
+  storageKeys.workouts,
+  storageKeys.exercises,
+  storageKeys.measurements,
+]);
 
 const workoutStatuses = {
   planned: "planned",
@@ -167,7 +195,11 @@ function loadList(key) {
 }
 
 function saveList(key, value, actionLabel) {
-  return safeSetItem(key, JSON.stringify(value), actionLabel);
+  const ok = safeSetItem(key, JSON.stringify(value), actionLabel);
+  if (ok && syncEntityKeys.has(key)) {
+    queueServerSync();
+  }
+  return ok;
 }
 
 function loadObject(key) {
@@ -187,6 +219,75 @@ function saveObject(key, value, actionLabel) {
 
 function clearObject(key, actionLabel) {
   return safeRemoveItem(key, actionLabel);
+}
+
+function loadAuthToken() {
+  return localStorage.getItem(authKeys.token) || "";
+}
+
+function saveAuthSession(token, user) {
+  safeSetItem(authKeys.token, token, "сохранить токен");
+  safeSetItem(authKeys.user, JSON.stringify(user), "сохранить пользователя");
+}
+
+function clearAuthSession() {
+  localStorage.removeItem(authKeys.token);
+  localStorage.removeItem(authKeys.user);
+}
+
+async function apiRequest(path, { method = "GET", body = null, auth = true } = {}) {
+  const headers = {};
+  if (body !== null) headers["Content-Type"] = "application/json";
+
+  const token = loadAuthToken();
+  if (auth && token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`/api${path}`, {
+    method,
+    headers,
+    body: body === null ? null : JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let message = `Ошибка запроса (${response.status})`;
+    try {
+      const payload = await response.json();
+      if (payload?.detail) message = payload.detail;
+    } catch {
+      // ignore invalid JSON
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function updateAccountSummary(user = null) {
+  if (accountEmail) {
+    accountEmail.textContent = user?.email ? `Выполнен вход: ${user.email}` : "Не выполнен вход.";
+  }
+}
+
+function updateSyncStatus(text = "") {
+  if (syncStatusText) {
+    syncStatusText.textContent = text || "После входа приложение загружает данные с сервера и автоматически отправляет изменения обратно.";
+  }
+}
+
+function setAuthenticatedUI(authenticated, user = null) {
+  isAuthenticated = authenticated;
+  authShell.hidden = authenticated;
+  appShell.hidden = !authenticated;
+  bottomNav.hidden = !authenticated;
+  updateAccountSummary(user);
+  if (authenticated) {
+    updateSyncStatus("Сервер подключен. Все изменения будут синхронизированы автоматически.");
+  } else {
+    updateSyncStatus();
+  }
 }
 
 function uid() {
@@ -1006,6 +1107,7 @@ function collectAllData() {
 
 function applyImportedData(payload) {
   suppressSaveErrors = true;
+  isApplyingServerState = true;
   try {
     const writes = [
       saveList(storageKeys.workouts, Array.isArray(payload.workouts) ? payload.workouts : [], "импортировать тренировки"),
@@ -1018,8 +1120,49 @@ function applyImportedData(payload) {
     writes.push(drafts.measurement ? saveObject(storageKeys.measurementDraft, drafts.measurement, "импортировать черновик замера") : clearObject(storageKeys.measurementDraft, "очистить черновик замера"));
     return writes.every(Boolean);
   } finally {
+    isApplyingServerState = false;
     suppressSaveErrors = false;
   }
+}
+
+async function pullServerData() {
+  const payload = await apiRequest("/sync");
+  if (!applyImportedData(payload)) {
+    throw new Error("Не удалось применить данные с сервера");
+  }
+  restoreWorkoutDraft();
+  restoreExerciseDraft();
+  restoreMeasurementDraft();
+  renderWorkoutHistory();
+  renderExerciseHistory();
+  renderMeasurementHistory();
+  refreshWorkoutExerciseCards();
+}
+
+async function pushServerData() {
+  if (!isAuthenticated || isApplyingServerState) return;
+  const payload = collectAllData();
+  await apiRequest("/sync", {
+    method: "PUT",
+    body: {
+      workouts: payload.workouts,
+      exercises: payload.exercises,
+      measurements: payload.measurements,
+    },
+  });
+  updateSyncStatus(`Последняя синхронизация: ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`);
+}
+
+function queueServerSync() {
+  if (!isAuthenticated || isApplyingServerState) return;
+  clearTimeout(serverSyncTimer);
+  serverSyncTimer = window.setTimeout(() => {
+    pushServerData().catch((error) => {
+      console.error(error);
+      updateSyncStatus("Не удалось синхронизировать изменения. Попробуй ещё раз.");
+      showToast("Не удалось синхронизировать изменения с сервером.");
+    });
+  }, 500);
 }
 
 function exportData() {
@@ -1144,6 +1287,83 @@ function openMeasurementForm() {
   openFormView("measurements");
 }
 
+function setAuthMode(registerMode) {
+  isRegisterMode = registerMode;
+  authSubmitButton.textContent = registerMode ? "Создать аккаунт" : "Войти";
+  authToggleButton.textContent = registerMode ? "У меня уже есть аккаунт" : "Создать аккаунт";
+  setDraftStatus(authStatus, "");
+}
+
+async function submitAuthForm(event) {
+  event.preventDefault();
+  const email = authEmailInput.value.trim().toLowerCase();
+  const password = authPasswordInput.value;
+  if (!email || !password) return;
+
+  authSubmitButton.disabled = true;
+  authToggleButton.disabled = true;
+  setDraftStatus(authStatus, isRegisterMode ? "Создаем аккаунт..." : "Входим...");
+
+  try {
+    const payload = await apiRequest(isRegisterMode ? "/auth/register" : "/auth/login", {
+      method: "POST",
+      auth: false,
+      body: { email, password },
+    });
+
+    saveAuthSession(payload.access_token, payload.user);
+    setAuthenticatedUI(true, payload.user);
+    await pullServerData();
+    authPasswordInput.value = "";
+    setDraftStatus(authStatus, "");
+    showToast(isRegisterMode ? "Аккаунт создан." : "Вход выполнен.");
+  } catch (error) {
+    console.error(error);
+    setDraftStatus(authStatus, error.message || "Не удалось выполнить вход.");
+  } finally {
+    authSubmitButton.disabled = false;
+    authToggleButton.disabled = false;
+  }
+}
+
+async function logout() {
+  clearTimeout(serverSyncTimer);
+  clearAuthSession();
+  setAuthenticatedUI(false, null);
+  authPasswordInput.value = "";
+  showToast("Вы вышли из аккаунта.");
+}
+
+async function bootstrapAuth() {
+  if (!logoutButton && clearAllDataButton?.parentElement) {
+    logoutButton = document.createElement("button");
+    logoutButton.id = "logout-button";
+    logoutButton.className = "ghost-button";
+    logoutButton.type = "button";
+    logoutButton.textContent = "Выйти";
+    clearAllDataButton.parentElement.append(logoutButton);
+    logoutButton.addEventListener("click", logout);
+  }
+
+  const token = loadAuthToken();
+  if (!token) {
+    setAuthenticatedUI(false, null);
+    setAuthMode(false);
+    return;
+  }
+
+  try {
+    const user = await apiRequest("/auth/me");
+    setAuthenticatedUI(true, user);
+    await pullServerData();
+  } catch (error) {
+    console.error(error);
+    clearAuthSession();
+    setAuthenticatedUI(false, null);
+    setAuthMode(false);
+  }
+}
+
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
     openListView(item.dataset.view);
@@ -1219,6 +1439,9 @@ exportDataButton.addEventListener("click", exportData);
 importDataButton.addEventListener("click", () => importDataInput.click());
 importDataInput.addEventListener("change", () => importDataFromFile(importDataInput.files?.[0]));
 clearAllDataButton.addEventListener("click", clearAllData);
+authForm.addEventListener("submit", submitAuthForm);
+authToggleButton.addEventListener("click", () => setAuthMode(!isRegisterMode));
+if (logoutButton) logoutButton.addEventListener("click", logout);
 
 workoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1378,12 +1601,24 @@ measurementNumericFields().forEach((input) => {
   input.defaultPlaceholder = input.placeholder;
 });
 
-restoreWorkoutDraft();
-restoreExerciseDraft();
-restoreMeasurementDraft();
-renderWorkoutHistory();
-renderExerciseHistory();
-renderMeasurementHistory();
-refreshWorkoutExerciseCards();
-showView(getLastView());
-showSubview(activeView, viewModes[activeView]);
+function initializeLocalUI() {
+  restoreWorkoutDraft();
+  restoreExerciseDraft();
+  restoreMeasurementDraft();
+  renderWorkoutHistory();
+  renderExerciseHistory();
+  renderMeasurementHistory();
+  refreshWorkoutExerciseCards();
+  showView(getLastView());
+  showSubview(activeView, viewModes[activeView]);
+}
+
+async function initApp() {
+  initializeLocalUI();
+  await bootstrapAuth();
+}
+
+initApp().catch((error) => {
+  console.error(error);
+  showToast("Не удалось запустить приложение.");
+});

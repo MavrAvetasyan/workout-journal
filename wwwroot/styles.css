@@ -28,6 +28,61 @@
   font-family: "Segoe UI", "SF Pro Display", sans-serif;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.auth-shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  min-height: 100vh;
+  display: grid;
+  align-items: center;
+  padding: 20px 14px 32px;
+}
+
+.auth-card {
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  background:
+    radial-gradient(circle at top right, rgba(31, 111, 255, 0.16), transparent 42%),
+    var(--surface);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  border-radius: 32px;
+  padding: 24px 20px;
+  display: grid;
+  gap: 20px;
+}
+
+.auth-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-copy h1 {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.auth-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-form {
+  gap: 14px;
+}
+
+.auth-actions {
+  display: grid;
+  gap: 10px;
+}
+
 * {
   box-sizing: border-box;
 }

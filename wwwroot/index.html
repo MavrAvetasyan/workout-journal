@@ -10,7 +10,36 @@
   <div class="page-glow page-glow-left"></div>
   <div class="page-glow page-glow-right"></div>
 
-  <div class="app-shell">
+  <section id="auth-shell" class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-copy">
+        <p class="screen-kicker">Аккаунт</p>
+        <h1>Вход в журнал тренировок</h1>
+        <p class="auth-text">Данные теперь хранятся на сервере. Войди в аккаунт, чтобы видеть свои тренировки, упражнения и замеры на разных устройствах.</p>
+      </div>
+
+      <form id="auth-form" class="stack-form auth-form">
+        <label class="field">
+          <span>Email</span>
+          <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </label>
+
+        <label class="field">
+          <span>Пароль</span>
+          <input id="auth-password" type="password" placeholder="Минимум 6 символов" autocomplete="current-password" required>
+        </label>
+
+        <p id="auth-status" class="draft-status" hidden></p>
+
+        <div class="form-actions auth-actions">
+          <button id="auth-submit-button" class="primary-button primary-button-wide" type="submit">Войти</button>
+          <button id="auth-toggle-button" class="ghost-button" type="button">Создать аккаунт</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <div id="app-shell" class="app-shell" hidden>
     <main class="views">
       <section id="view-workouts" class="view is-active">
         <div class="subview is-active" data-subview="list">
@@ -296,6 +325,12 @@
 
           <section class="panel info-panel">
             <article class="info-card">
+              <h3>Аккаунт</h3>
+              <p id="account-email">Не выполнен вход.</p>
+              <p id="sync-status-text">После входа приложение загружает данные с сервера и автоматически отправляет изменения обратно.</p>
+            </article>
+
+            <article class="info-card">
               <h3>Как сейчас хранятся данные</h3>
               <p>Тренировки, упражнения, замеры и черновики сохраняются локально в браузере на этом устройстве.</p>
             </article>
@@ -326,7 +361,7 @@
     </main>
   </div>
 
-  <nav class="bottom-nav" aria-label="Основная навигация">
+  <nav id="bottom-nav" class="bottom-nav" aria-label="Основная навигация" hidden>
     <button class="nav-item is-active" type="button" data-view="workouts">
       <span class="nav-icon" aria-hidden="true">🏋</span>
       <span class="nav-label">Тренировки</span>
@@ -384,6 +419,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=20260611d" defer></script>
+  <script src="./app.js?v=20260625a" defer></script>
 </body>
 </html>
