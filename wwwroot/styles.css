@@ -637,8 +637,9 @@ body.is-detail-mode .bottom-nav {
   }
 
   .screen-header {
-    padding: 14px 14px;
-    border-radius: 22px;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 20px;
   }
 
   .screen-icon {
@@ -666,18 +667,38 @@ body.is-detail-mode .bottom-nav {
   .primary-button,
   .secondary-button,
   .ghost-button {
-    min-height: 42px;
-    padding: 10px 14px;
-    font-size: 0.84rem;
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 0.78rem;
   }
 
   .screen-title-center {
     min-width: 0;
+    gap: 8px;
   }
 
   .screen-title-center h2,
   .screen-title-wrap h2 {
-    font-size: 1.26rem;
+    font-size: 1.08rem;
+    line-height: 1.02;
+  }
+
+  .screen-kicker {
+    margin-bottom: 2px;
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+  }
+
+  .back-button,
+  .header-save-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .screen-header .screen-title-center,
+  .screen-header .screen-title-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .field input,
