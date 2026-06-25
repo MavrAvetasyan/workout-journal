@@ -22,6 +22,7 @@ const bottomNav = document.querySelector("#bottom-nav");
 const authForm = document.querySelector("#auth-form");
 const authEmailInput = document.querySelector("#auth-email");
 const authPasswordInput = document.querySelector("#auth-password");
+const authShowPasswordInput = document.querySelector("#auth-show-password");
 const authStatus = document.querySelector("#auth-status");
 const authSubmitButton = document.querySelector("#auth-submit-button");
 const authToggleButton = document.querySelector("#auth-toggle-button");
@@ -1442,6 +1443,11 @@ clearAllDataButton.addEventListener("click", clearAllData);
 authForm.addEventListener("submit", submitAuthForm);
 authToggleButton.addEventListener("click", () => setAuthMode(!isRegisterMode));
 if (logoutButton) logoutButton.addEventListener("click", logout);
+if (authShowPasswordInput) {
+  authShowPasswordInput.addEventListener("change", () => {
+    authPasswordInput.type = authShowPasswordInput.checked ? "text" : "password";
+  });
+}
 
 workoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
