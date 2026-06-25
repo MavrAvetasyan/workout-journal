@@ -24,6 +24,15 @@ Open:
 - API: `http://127.0.0.1:8000/api`
 - Swagger UI: `http://127.0.0.1:8000/docs`
 
+## Deploy on Render
+
+Recommended for production:
+
+- Web Service on Render
+- PostgreSQL on Render
+
+The project root already includes `render.yaml`, so Render can create the web service and database from the repo.
+
 ## Implemented in this phase
 
 - registration
@@ -39,3 +48,4 @@ Open:
 - local development database is created automatically in `backend/data/app.db`
 - the site is served by FastAPI from `wwwroot`
 - drafts are still stored on the frontend for now
+- for production, use `DATABASE_URL` from Render PostgreSQL instead of local SQLite
