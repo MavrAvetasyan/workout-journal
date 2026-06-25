@@ -679,7 +679,7 @@ body.is-detail-mode .bottom-nav {
 
   .screen-title-center h2,
   .screen-title-wrap h2 {
-    font-size: 1.08rem;
+    font-size: 1rem;
     line-height: 1.02;
   }
 
@@ -699,6 +699,25 @@ body.is-detail-mode .bottom-nav {
   .screen-header .screen-title-wrap {
     flex: 1 1 auto;
     min-width: 0;
+  }
+
+  .subview[data-subview="form"] .screen-title-center {
+    justify-content: center;
+  }
+
+  .subview[data-subview="form"] .screen-kicker {
+    display: none;
+  }
+
+  .subview[data-subview="form"] .screen-title-center h2 {
+    font-size: 0.94rem;
+  }
+
+  .subview[data-subview="form"] .back-button,
+  .subview[data-subview="form"] .header-save-button {
+    min-width: 84px;
+    padding-inline: 10px;
+    font-size: 0.74rem;
   }
 
   .field input,
