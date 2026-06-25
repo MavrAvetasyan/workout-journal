@@ -40,13 +40,19 @@ const workoutDraftStatus = document.querySelector("#workout-draft-status");
 const workoutIdInput = document.querySelector("#workout-id");
 const workoutTitleInput = document.querySelector("#workout-title");
 const workoutTypeInput = document.querySelector("#workout-type");
+const workoutStatusInput = document.querySelector("#workout-status");
 const workoutStartTimeInput = document.querySelector("#workout-start-time");
 const workoutEndTimeInput = document.querySelector("#workout-end-time");
+const workoutStartLabel = workoutStartTimeInput?.closest(".field")?.querySelector("span");
+const workoutEndLabel = workoutEndTimeInput?.closest(".field")?.querySelector("span");
 const workoutExercisesList = document.querySelector("#workout-exercises-list");
 const workoutExerciseTemplate = document.querySelector("#workout-exercise-template");
 const workoutHistoryList = document.querySelector("#workout-history-list");
 const workoutHistoryCount = document.querySelector("#workout-history-count");
 const workoutEmptyState = document.querySelector("#workout-empty-state");
+const activeWorkoutCard = document.querySelector("#active-workout-card");
+const plannedFilterButton = document.querySelector("#planned-filter-button");
+const completedFilterButton = document.querySelector("#completed-filter-button");
 const openWorkoutFormButton = document.querySelector("#open-workout-form-button");
 const resetWorkoutButton = document.querySelector("#reset-workout-button");
 const addWorkoutExerciseButton = document.querySelector("#add-workout-exercise-button");
@@ -108,6 +114,8 @@ let isRegisterMode = false;
 let isAuthenticated = false;
 let serverSyncTimer = null;
 let isApplyingServerState = false;
+let workoutListFilter = "planned";
+let activeWorkoutExerciseFilter = "pending";
 
 const authKeys = {
   token: "training-journal-auth-token-v1",
@@ -408,13 +416,22 @@ function normalizeWorkout(item = {}) {
       ? workoutStatuses.completed
       : workoutStatuses.planned;
 
+  const scheduledStart = item.scheduledStartTime ?? (status === workoutStatuses.planned ? item.startTime ?? "" : "");
+  const scheduledEnd = item.scheduledEndTime ?? (status === workoutStatuses.planned ? item.endTime ?? "" : "");
+  const actualStart = item.actualStartTime ?? (status !== workoutStatuses.planned ? item.startTime ?? "" : "");
+  const actualEnd = item.actualEndTime ?? (status === workoutStatuses.completed ? item.endTime ?? "" : "");
+
   return {
     id: item.id ?? uid(),
     title: item.title?.trim?.() ?? item.title ?? "",
     type: item.type === "cardio" ? "cardio" : "strength",
     status,
-    startTime: item.startTime ?? "",
-    endTime: item.endTime ?? "",
+    startTime: actualStart || scheduledStart || "",
+    endTime: actualEnd || scheduledEnd || "",
+    scheduledStartTime: scheduledStart,
+    scheduledEndTime: scheduledEnd,
+    actualStartTime: actualStart,
+    actualEndTime: actualEnd,
     createdAt: item.createdAt ?? item.startTime ?? new Date().toISOString(),
     updatedAt: item.updatedAt ?? new Date().toISOString(),
     exercises: Array.isArray(item.exercises) ? item.exercises.map(normalizeWorkoutEntry) : [],
@@ -578,6 +595,7 @@ function buildWorkoutDraft() {
     id: workoutIdInput.value,
     title: workoutTitleInput.value.trim(),
     type: workoutTypeInput.value,
+    status: workoutStatusInput.value,
     startTime: workoutStartTimeInput.value,
     endTime: workoutEndTimeInput.value,
     exercises: collectWorkoutExercises(),
@@ -686,9 +704,17 @@ function createWorkoutExerciseCard(value = {}) {
 
 function applyDefaultWorkoutTimes() {
   const now = new Date();
-  const start = new Date(now.getTime() - 60 * 60 * 1000);
+  const start = new Date(now.getTime() + 60 * 60 * 1000);
+  start.setMinutes(0, 0, 0);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
   workoutStartTimeInput.value = toLocalInputValue(start);
-  workoutEndTimeInput.value = toLocalInputValue(now);
+  workoutEndTimeInput.value = toLocalInputValue(end);
+}
+
+function syncWorkoutDateLabels() {
+  const isCompleted = workoutStatusInput.value === workoutStatuses.completed;
+  if (workoutStartLabel) workoutStartLabel.textContent = isCompleted ? "Фактическое начало" : "Плановое начало";
+  if (workoutEndLabel) workoutEndLabel.textContent = isCompleted ? "Фактическое окончание" : "Плановое окончание";
 }
 
 function resetWorkoutForm({ preserveDraft = false, preserveStatus = false } = {}) {
@@ -698,7 +724,9 @@ function resetWorkoutForm({ preserveDraft = false, preserveStatus = false } = {}
   workoutExercisesList.innerHTML = "";
   createWorkoutExerciseCard();
   workoutTypeInput.value = "strength";
+  workoutStatusInput.value = workoutStatuses.planned;
   applyDefaultWorkoutTimes();
+  syncWorkoutDateLabels();
   refreshWorkoutExerciseCards();
   if (!preserveDraft) clearObject(storageKeys.workoutDraft, "очистить черновик тренировки");
   if (!preserveStatus) setDraftStatus(workoutDraftStatus, "");
@@ -708,8 +736,13 @@ function fillWorkoutForm(workout, { editing = false } = {}) {
   workoutIdInput.value = workout.id ?? "";
   workoutTitleInput.value = workout.title ?? "";
   workoutTypeInput.value = workout.type ?? "strength";
-  workoutStartTimeInput.value = workout.startTime ?? "";
-  workoutEndTimeInput.value = workout.endTime ?? "";
+  workoutStatusInput.value = workout.status ?? workoutStatuses.planned;
+  workoutStartTimeInput.value = workout.status === workoutStatuses.completed
+    ? (workout.actualStartTime ?? workout.startTime ?? "")
+    : (workout.scheduledStartTime ?? workout.startTime ?? "");
+  workoutEndTimeInput.value = workout.status === workoutStatuses.completed
+    ? (workout.actualEndTime ?? workout.endTime ?? "")
+    : (workout.scheduledEndTime ?? workout.endTime ?? "");
   workoutFormTitle.textContent = editing ? "Редактирование тренировки" : "Новая тренировка";
   workoutExercisesList.innerHTML = "";
   if (workout.exercises?.length) {
@@ -717,6 +750,7 @@ function fillWorkoutForm(workout, { editing = false } = {}) {
   } else {
     createWorkoutExerciseCard();
   }
+  syncWorkoutDateLabels();
   refreshWorkoutExerciseCards();
 }
 
@@ -758,32 +792,193 @@ function runDeleteWithUndo(config) {
   });
 }
 
+function getWorkoutPrimaryStart(workout) {
+  return workout.actualStartTime || workout.scheduledStartTime || workout.startTime || "";
+}
+
+function getWorkoutPrimaryEnd(workout) {
+  return workout.actualEndTime || workout.scheduledEndTime || workout.endTime || "";
+}
+
+function workoutDateMeta(workout) {
+  if (workout.status === workoutStatuses.planned) {
+    return workout.scheduledStartTime ? `План: ${formatDate(workout.scheduledStartTime)}` : "Без планового времени";
+  }
+  if (workout.status === workoutStatuses.active) {
+    const planned = workout.scheduledStartTime ? `План: ${formatDate(workout.scheduledStartTime)}` : "Без планового старта";
+    const actual = workout.actualStartTime ? `Старт: ${formatDate(workout.actualStartTime)}` : "";
+    return [planned, actual].filter(Boolean).join(" · ");
+  }
+  return workout.actualStartTime ? `Факт: ${formatDate(workout.actualStartTime)}` : "Без даты";
+}
+
+function workoutExerciseSummary(entry) {
+  const source = entry.fact ?? entry.plan ?? null;
+  if (!source) return "Без данных";
+  const parts = [];
+  if (source.sets !== null && source.sets !== undefined) parts.push(`${source.sets} пдх`);
+  if (source.reps !== null && source.reps !== undefined) parts.push(`${source.reps} повт`);
+  if (source.weight !== null && source.weight !== undefined) parts.push(`${source.weight} кг`);
+  return parts.join(" · ") || (source.note || "Без данных");
+}
+
+function changeWorkoutStatus(workoutId, updater) {
+  const workouts = getWorkouts();
+  const index = workouts.findIndex((item) => item.id === workoutId);
+  if (index < 0) return;
+  const updated = updater(normalizeWorkout(workouts[index]));
+  workouts[index] = normalizeWorkout({ ...updated, updatedAt: new Date().toISOString() });
+  if (!setWorkouts(workouts)) return;
+  renderWorkoutHistory();
+}
+
+function toggleWorkoutExerciseDone(workoutId, entryId) {
+  changeWorkoutStatus(workoutId, (workout) => ({
+    ...workout,
+    exercises: workout.exercises.map((entry) => {
+      if (entry.id !== entryId) return entry;
+      const nextStatus = entry.status === "done" ? "pending" : "done";
+      const fallbackFact = entry.fact ?? entry.plan ?? null;
+      return {
+        ...entry,
+        status: nextStatus,
+        fact: nextStatus === "done" ? (entry.fact ?? fallbackFact) : entry.fact,
+      };
+    }),
+  }));
+}
+
+function activateWorkout(workoutId) {
+  const activeExists = getWorkouts().some((item) => item.status === workoutStatuses.active && item.id !== workoutId);
+  if (activeExists) {
+    alert("Сначала заверши текущую активную тренировку.");
+    return;
+  }
+  changeWorkoutStatus(workoutId, (workout) => ({
+    ...workout,
+    status: workoutStatuses.active,
+    actualStartTime: new Date().toISOString(),
+  }));
+}
+
+function completeWorkout(workoutId) {
+  changeWorkoutStatus(workoutId, (workout) => ({
+    ...workout,
+    status: workoutStatuses.completed,
+    actualStartTime: workout.actualStartTime || new Date().toISOString(),
+    actualEndTime: new Date().toISOString(),
+    endTime: new Date().toISOString(),
+  }));
+}
+
+function renderActiveWorkoutCard(workout) {
+  if (!workout) {
+    activeWorkoutCard.hidden = true;
+    activeWorkoutCard.innerHTML = "";
+    return;
+  }
+
+  const entries = workout.exercises.filter((entry) => {
+    if (activeWorkoutExerciseFilter === "done") return entry.status === "done";
+    if (activeWorkoutExerciseFilter === "pending") return entry.status !== "done";
+    return true;
+  });
+
+  activeWorkoutCard.hidden = false;
+  activeWorkoutCard.innerHTML = `
+    <div class="active-workout-top">
+      <div>
+        <p class="section-kicker">Активная тренировка</p>
+        <h3>${escapeHtml(workoutListTitle(workout))}</h3>
+        <p class="history-meta">${escapeHtml(workoutDateMeta(workout))}</p>
+      </div>
+      <span class="pill">${workoutStatusLabel(workout.status)}</span>
+    </div>
+    <div class="workout-filter-row compact">
+      <button class="filter-chip ${activeWorkoutExerciseFilter === "pending" ? "is-active" : ""}" type="button" data-active-filter="pending">Запланированные</button>
+      <button class="filter-chip ${activeWorkoutExerciseFilter === "done" ? "is-active" : ""}" type="button" data-active-filter="done">Сделанные</button>
+    </div>
+    <div class="active-exercise-list">
+      ${entries.length ? entries.map((entry) => `
+        <article class="active-exercise-item">
+          <div>
+            <h4>${escapeHtml(getExerciseById(entry.exerciseId)?.name || "Упражнение")}</h4>
+            <p>${escapeHtml(workoutExerciseSummary(entry))}</p>
+          </div>
+          <button class="${entry.status === "done" ? "ghost-button" : "secondary-button"} active-exercise-toggle" type="button" data-entry-id="${entry.id}">
+            ${entry.status === "done" ? "Вернуть" : "Готово"}
+          </button>
+        </article>
+      `).join("") : `<p class="helper-text">В этом фильтре пока нет упражнений.</p>`}
+    </div>
+    <div class="history-card-actions">
+      <button class="secondary-button" type="button" data-active-complete="${workout.id}">Завершить тренировку</button>
+      <button class="ghost-button" type="button" data-active-edit="${workout.id}">Редактировать план</button>
+    </div>
+  `;
+
+  activeWorkoutCard.querySelectorAll("[data-active-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeWorkoutExerciseFilter = button.dataset.activeFilter;
+      renderWorkoutHistory();
+    });
+  });
+
+  activeWorkoutCard.querySelectorAll(".active-exercise-toggle").forEach((button) => {
+    button.addEventListener("click", () => toggleWorkoutExerciseDone(workout.id, button.dataset.entryId));
+  });
+
+  activeWorkoutCard.querySelector("[data-active-complete]")?.addEventListener("click", () => completeWorkout(workout.id));
+  activeWorkoutCard.querySelector("[data-active-edit]")?.addEventListener("click", () => {
+    fillWorkoutForm({
+      ...workout,
+      scheduledStartTime: workout.scheduledStartTime ? toLocalInputValue(new Date(workout.scheduledStartTime)) : "",
+      scheduledEndTime: workout.scheduledEndTime ? toLocalInputValue(new Date(workout.scheduledEndTime)) : "",
+      actualStartTime: workout.actualStartTime ? toLocalInputValue(new Date(workout.actualStartTime)) : "",
+      actualEndTime: workout.actualEndTime ? toLocalInputValue(new Date(workout.actualEndTime)) : "",
+    }, { editing: true });
+    openFormView("workouts");
+  });
+}
+
 function renderWorkoutHistory() {
   const workouts = getWorkouts().sort((a, b) => {
     const statusOrder = workoutStatusSortOrder(a.status) - workoutStatusSortOrder(b.status);
     if (statusOrder !== 0) return statusOrder;
-    return new Date(b.startTime || b.createdAt || 0) - new Date(a.startTime || a.createdAt || 0);
+    return new Date(getWorkoutPrimaryStart(b) || b.createdAt || 0) - new Date(getWorkoutPrimaryStart(a) || a.createdAt || 0);
   });
-  workoutHistoryList.innerHTML = "";
-  workoutHistoryCount.textContent = `${workouts.length} ${pluralize(workouts.length, "запись", "записи", "записей")}`;
-  workoutEmptyState.hidden = workouts.length > 0;
 
-  workouts.forEach((workout) => {
+  const activeWorkout = workouts.find((item) => item.status === workoutStatuses.active) ?? null;
+  const filteredWorkouts = workouts.filter((workout) => {
+    if (workout.status === workoutStatuses.active) return false;
+    if (workoutListFilter === "planned") return workout.status === workoutStatuses.planned;
+    return workout.status === workoutStatuses.completed || workout.status === workoutStatuses.cancelled;
+  });
+
+  renderActiveWorkoutCard(activeWorkout);
+  workoutHistoryList.innerHTML = "";
+  workoutHistoryCount.textContent = `${filteredWorkouts.length} ${pluralize(filteredWorkouts.length, "запись", "записи", "записей")}`;
+  workoutEmptyState.hidden = filteredWorkouts.length > 0 || Boolean(activeWorkout);
+  plannedFilterButton?.classList.toggle("is-active", workoutListFilter === "planned");
+  completedFilterButton?.classList.toggle("is-active", workoutListFilter === "completed");
+
+  filteredWorkouts.forEach((workout) => {
     const summary = workout.exercises.length
-      ? workout.exercises.map((entry) => getExerciseById(entry.exerciseId)?.name || "Удаленное упражнение").join(" · ")
+      ? workout.exercises.map((entry) => getExerciseById(entry.exerciseId)?.name || "Удалённое упражнение").join(" · ")
       : "Без упражнений";
     const card = document.createElement("article");
-    card.className = "history-card";
+    card.className = "history-card compact-history-card";
     card.innerHTML = `
       <div class="history-topline">
         <div>
           <h4 class="history-title">${escapeHtml(workoutListTitle(workout))}</h4>
-          <p class="history-meta">${workout.startTime ? formatDate(workout.startTime) : "Без даты"} · ${workoutTypeLabel(workout.type)} · ${workoutStatusLabel(workout.status)}</p>
+          <p class="history-meta">${workoutDateMeta(workout)} · ${workoutTypeLabel(workout.type)} · ${workoutStatusLabel(workout.status)}</p>
         </div>
         <span class="pill">${workoutStatusLabel(workout.status)}</span>
       </div>
       <p class="history-summary">${escapeHtml(summary)}</p>
       <div class="history-card-actions">
+        ${workout.status === workoutStatuses.planned ? `<button class="secondary-button activate-workout-button" type="button">Активировать</button>` : ""}
         <button class="mini-icon-button edit-workout-button" type="button" aria-label="Редактировать">✎</button>
         <button class="ghost-button delete-workout-button" type="button">Удалить</button>
       </div>
@@ -791,14 +986,17 @@ function renderWorkoutHistory() {
     card.querySelector(".edit-workout-button").addEventListener("click", () => {
       fillWorkoutForm({
         ...workout,
-        startTime: workout.startTime ? toLocalInputValue(new Date(workout.startTime)) : "",
-        endTime: workout.endTime ? toLocalInputValue(new Date(workout.endTime)) : "",
+        scheduledStartTime: workout.scheduledStartTime ? toLocalInputValue(new Date(workout.scheduledStartTime)) : "",
+        scheduledEndTime: workout.scheduledEndTime ? toLocalInputValue(new Date(workout.scheduledEndTime)) : "",
+        actualStartTime: workout.actualStartTime ? toLocalInputValue(new Date(workout.actualStartTime)) : "",
+        actualEndTime: workout.actualEndTime ? toLocalInputValue(new Date(workout.actualEndTime)) : "",
       }, { editing: true });
       setDraftStatus(workoutDraftStatus, "");
       persistWorkoutDraft();
       openFormView("workouts");
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
+    card.querySelector(".activate-workout-button")?.addEventListener("click", () => activateWorkout(workout.id));
     card.querySelector(".delete-workout-button").addEventListener("click", () => {
       if (!window.confirm("Удалить эту тренировку?")) return;
       const previous = getWorkouts();
@@ -1404,6 +1602,11 @@ workoutTypeInput.addEventListener("change", () => {
   persistWorkoutDraft();
 });
 
+workoutStatusInput.addEventListener("change", () => {
+  syncWorkoutDateLabels();
+  persistWorkoutDraft();
+});
+
 [workoutTitleInput, workoutStartTimeInput, workoutEndTimeInput].forEach((input) => {
   input.addEventListener("input", persistWorkoutDraft);
   input.addEventListener("change", persistWorkoutDraft);
@@ -1443,6 +1646,14 @@ clearAllDataButton.addEventListener("click", clearAllData);
 authForm.addEventListener("submit", submitAuthForm);
 authToggleButton.addEventListener("click", () => setAuthMode(!isRegisterMode));
 if (logoutButton) logoutButton.addEventListener("click", logout);
+plannedFilterButton?.addEventListener("click", () => {
+  workoutListFilter = "planned";
+  renderWorkoutHistory();
+});
+completedFilterButton?.addEventListener("click", () => {
+  workoutListFilter = "completed";
+  renderWorkoutHistory();
+});
 if (authShowPasswordInput) {
   authShowPasswordInput.addEventListener("change", () => {
     authPasswordInput.type = authShowPasswordInput.checked ? "text" : "password";
@@ -1479,22 +1690,33 @@ workoutForm.addEventListener("submit", (event) => {
     id: workoutIdInput.value || uid(),
     title: workoutTitleInput.value.trim(),
     type: workoutTypeInput.value,
-    status: getWorkouts().find((item) => item.id === workoutIdInput.value)?.status ?? workoutStatuses.completed,
+    status: workoutStatusInput.value,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
+    scheduledStartTime: workoutStatusInput.value === workoutStatuses.planned ? startTime.toISOString() : "",
+    scheduledEndTime: workoutStatusInput.value === workoutStatuses.planned ? endTime.toISOString() : "",
+    actualStartTime: workoutStatusInput.value === workoutStatuses.completed ? startTime.toISOString() : "",
+    actualEndTime: workoutStatusInput.value === workoutStatuses.completed ? endTime.toISOString() : "",
     createdAt: getWorkouts().find((item) => item.id === workoutIdInput.value)?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     exercises: entries.map((entry) => ({
       id: uid(),
       exerciseId: entry.exerciseId,
-      status: "done",
-      plan: null,
-      fact: {
+      status: workoutStatusInput.value === workoutStatuses.completed ? "done" : "pending",
+      plan: {
         sets: entry.sets === "" ? null : Number(entry.sets),
         weight: entry.weight === "" ? null : Number(entry.weight),
         reps: entry.reps === "" ? null : Number(entry.reps),
         note: entry.note,
       },
+      fact: workoutStatusInput.value === workoutStatuses.completed
+        ? {
+            sets: entry.sets === "" ? null : Number(entry.sets),
+            weight: entry.weight === "" ? null : Number(entry.weight),
+            reps: entry.reps === "" ? null : Number(entry.reps),
+            note: entry.note,
+          }
+        : null,
     })),
   };
 

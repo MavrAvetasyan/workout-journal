@@ -67,6 +67,11 @@
               </div>
               <span id="workout-history-count" class="history-count">0 записей</span>
             </div>
+            <div id="active-workout-card" class="active-workout-card" hidden></div>
+            <div class="workout-filter-row">
+              <button id="planned-filter-button" class="filter-chip is-active" type="button">Запланированные</button>
+              <button id="completed-filter-button" class="filter-chip" type="button">Завершённые</button>
+            </div>
             <div id="workout-empty-state" class="empty-state">
               <div class="empty-state-icon">🏋</div>
               <h4>Тренировок пока нет</h4>
@@ -101,6 +106,15 @@
                 <select id="workout-type" required>
                   <option value="strength">Силовая</option>
                   <option value="cardio">Кардио</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Статус тренировки</span>
+                <select id="workout-status" required>
+                  <option value="planned">Запланирована</option>
+                  <option value="active">Активна</option>
+                  <option value="completed">Сразу завершить</option>
                 </select>
               </label>
 
