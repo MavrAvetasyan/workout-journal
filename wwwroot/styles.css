@@ -568,6 +568,29 @@ button {
   max-width: 100%;
 }
 
+.active-workout-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.active-quick-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.active-quick-add-select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-strong);
+  padding: 10px 12px;
+  color: var(--text);
+}
+
 .active-exercise-list {
   display: grid;
   gap: 8px;
@@ -601,7 +624,7 @@ button {
 
 .active-exercise-toggle {
   flex: 0 0 auto;
-  min-width: 86px;
+  min-width: 42px;
   min-height: 36px;
   padding: 0 12px;
   border: 0;
@@ -616,6 +639,23 @@ button {
   min-width: 44px;
   background: rgba(31, 155, 108, 0.14);
   color: #13684b;
+}
+
+.active-exercise-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.active-exercise-cancel {
+  min-width: 42px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(217, 75, 75, 0.1);
+  color: var(--danger);
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .active-workout-actions {
@@ -945,6 +985,12 @@ body.is-detail-mode .bottom-nav {
     font-size: 0.82rem;
   }
 
+  .active-workout-toolbar,
+  .active-quick-add {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
   .active-workout-statusbar {
     gap: 6px;
   }
@@ -959,6 +1005,16 @@ body.is-detail-mode .bottom-nav {
 
   .active-secondary-action {
     width: 100%;
+  }
+
+  .active-add-toggle,
+  .active-quick-add-submit {
+    width: 100%;
+  }
+
+  .active-add-toggle {
+    width: 46px;
+    justify-self: end;
   }
 
   .compact-details summary {

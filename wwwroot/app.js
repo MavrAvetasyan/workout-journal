@@ -116,6 +116,7 @@ let serverSyncTimer = null;
 let isApplyingServerState = false;
 let workoutListFilter = "planned";
 let activeWorkoutExerciseFilter = "pending";
+let activeWorkoutQuickAddOpen = false;
 
 const authKeys = {
   token: "training-journal-auth-token-v1",
@@ -877,6 +878,31 @@ function toggleWorkoutExerciseDone(workoutId, entryId) {
   }));
 }
 
+function removeWorkoutExercise(workoutId, entryId) {
+  changeWorkoutStatus(workoutId, (workout) => ({
+    ...workout,
+    exercises: workout.exercises.filter((entry) => entry.id !== entryId),
+  }));
+}
+
+function addExerciseToActiveWorkout(workoutId, exerciseId) {
+  if (!exerciseId) return;
+  activeWorkoutQuickAddOpen = false;
+  changeWorkoutStatus(workoutId, (workout) => ({
+    ...workout,
+    exercises: [
+      ...workout.exercises,
+      normalizeWorkoutEntry({
+        id: uid(),
+        exerciseId,
+        status: "pending",
+        plan: { sets: null, weight: null, reps: null, note: "" },
+        fact: null,
+      }),
+    ],
+  }));
+}
+
 function activateWorkout(workoutId) {
   const activeExists = getWorkouts().some((item) => item.status === workoutStatuses.active && item.id !== workoutId);
   if (activeExists) {
@@ -914,6 +940,10 @@ function renderActiveWorkoutCard(workout) {
     if (activeWorkoutExerciseFilter === "pending") return entry.status !== "done";
     return true;
   });
+  const availableQuickExercises = getActiveExercises().filter((item) => item.type === workout.type);
+  const quickAddOptions = availableQuickExercises
+    .map((exercise) => `<option value="${exercise.id}">${escapeHtml(exercise.name)}</option>`)
+    .join("");
 
   activeWorkoutCard.hidden = false;
   activeWorkoutCard.innerHTML = `
@@ -930,10 +960,22 @@ function renderActiveWorkoutCard(workout) {
       <span class="tiny-pill">${pendingCount} осталось</span>
       <span class="tiny-pill">${doneCount} сделано</span>
     </div>
-    <div class="workout-filter-row compact">
-      <button class="filter-chip ${activeWorkoutExerciseFilter === "pending" ? "is-active" : ""}" type="button" data-active-filter="pending">Запланированные</button>
-      <button class="filter-chip ${activeWorkoutExerciseFilter === "done" ? "is-active" : ""}" type="button" data-active-filter="done">Сделанные</button>
+    <div class="active-workout-toolbar">
+      <div class="workout-filter-row compact">
+        <button class="filter-chip ${activeWorkoutExerciseFilter === "pending" ? "is-active" : ""}" type="button" data-active-filter="pending">Запланированные</button>
+        <button class="filter-chip ${activeWorkoutExerciseFilter === "done" ? "is-active" : ""}" type="button" data-active-filter="done">Сделанные</button>
+      </div>
+      <button class="mini-icon-button active-add-toggle" type="button" aria-label="Добавить упражнение">+</button>
     </div>
+    ${activeWorkoutQuickAddOpen ? `
+      <div class="active-quick-add">
+        <select class="active-quick-add-select">
+          <option value="">Выбери упражнение</option>
+          ${quickAddOptions}
+        </select>
+        <button class="secondary-button active-quick-add-submit" type="button">Добавить</button>
+      </div>
+    ` : ""}
     <div class="active-exercise-list">
       ${entries.length ? entries.map((entry) => `
         <article class="active-exercise-item ${entry.status === "done" ? "is-done" : ""}">
@@ -941,9 +983,12 @@ function renderActiveWorkoutCard(workout) {
             <h4>${escapeHtml(getExerciseById(entry.exerciseId)?.name || "Упражнение")}</h4>
             <p>${escapeHtml(workoutExerciseSummary(entry))}</p>
           </div>
-          <button class="active-exercise-toggle ${entry.status === "done" ? "is-done" : ""}" type="button" data-entry-id="${entry.id}" aria-label="${entry.status === "done" ? "Вернуть в запланированные" : "Отметить как выполненное"}">
-            ${entry.status === "done" ? "✓" : "Готово"}
-          </button>
+          <div class="active-exercise-actions">
+            ${entry.status !== "done" ? `<button class="active-exercise-cancel" type="button" data-remove-entry-id="${entry.id}" aria-label="Убрать упражнение">✕</button>` : ""}
+            <button class="active-exercise-toggle ${entry.status === "done" ? "is-done" : ""}" type="button" data-entry-id="${entry.id}" aria-label="${entry.status === "done" ? "Вернуть в запланированные" : "Отметить как выполненное"}">
+              ${entry.status === "done" ? "↺" : "✓"}
+            </button>
+          </div>
         </article>
       `).join("") : `<p class="helper-text">В этом фильтре пока нет упражнений.</p>`}
     </div>
@@ -961,6 +1006,17 @@ function renderActiveWorkoutCard(workout) {
 
   activeWorkoutCard.querySelectorAll(".active-exercise-toggle").forEach((button) => {
     button.addEventListener("click", () => toggleWorkoutExerciseDone(workout.id, button.dataset.entryId));
+  });
+  activeWorkoutCard.querySelectorAll("[data-remove-entry-id]").forEach((button) => {
+    button.addEventListener("click", () => removeWorkoutExercise(workout.id, button.dataset.removeEntryId));
+  });
+  activeWorkoutCard.querySelector(".active-add-toggle")?.addEventListener("click", () => {
+    activeWorkoutQuickAddOpen = !activeWorkoutQuickAddOpen;
+    renderWorkoutHistory();
+  });
+  activeWorkoutCard.querySelector(".active-quick-add-submit")?.addEventListener("click", () => {
+    const select = activeWorkoutCard.querySelector(".active-quick-add-select");
+    addExerciseToActiveWorkout(workout.id, select?.value || "");
   });
 
   activeWorkoutCard.querySelector("[data-active-complete]")?.addEventListener("click", () => completeWorkout(workout.id));
