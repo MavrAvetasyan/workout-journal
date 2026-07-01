@@ -473,12 +473,29 @@ function setMeasurements(items) {
 function normalizeWorkoutExercise(item = {}) {
   const source = item.plan ?? item.fact ?? item.actual ?? item;
   return {
+    id: item.id ?? "",
+    status: typeof item.status === "string" ? item.status : "",
+    plan: item.plan ? normalizeWorkoutPhase(item.plan) : null,
+    fact: item.fact ? normalizeWorkoutPhase(item.fact) : null,
     exerciseId: item.exerciseId ?? "",
     sets: source.sets ?? "",
     weight: source.weight ?? "",
     reps: source.reps ?? "",
     note: source.note ?? "",
   };
+}
+
+function serializeWorkoutPhase(value) {
+  return value ? JSON.stringify(normalizeWorkoutPhase(value)) : "";
+}
+
+function parseWorkoutPhase(raw) {
+  if (!raw) return null;
+  try {
+    return normalizeWorkoutPhase(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 function workoutStatusSortOrder(status) {
@@ -606,6 +623,10 @@ function buildWorkoutDraft() {
 function collectWorkoutExercises() {
   return [...workoutExercisesList.querySelectorAll(".exercise-card")]
     .map((card) => ({
+      entryId: card.querySelector(".workout-entry-id").value,
+      entryStatus: card.querySelector(".workout-entry-status").value,
+      originalPlan: parseWorkoutPhase(card.querySelector(".workout-entry-plan").value),
+      originalFact: parseWorkoutPhase(card.querySelector(".workout-entry-fact").value),
       exerciseId: card.querySelector(".workout-exercise-id").value,
       sets: card.querySelector(".exercise-sets").value,
       weight: card.querySelector(".exercise-weight").value,
@@ -666,12 +687,20 @@ function createWorkoutExerciseCard(value = {}) {
   const fragment = workoutExerciseTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".exercise-card");
   const normalized = normalizeWorkoutExercise(value);
+  const entryIdInput = card.querySelector(".workout-entry-id");
+  const entryStatusInput = card.querySelector(".workout-entry-status");
+  const entryPlanInput = card.querySelector(".workout-entry-plan");
+  const entryFactInput = card.querySelector(".workout-entry-fact");
   const select = card.querySelector(".workout-exercise-id");
   const setsInput = card.querySelector(".exercise-sets");
   const weightInput = card.querySelector(".exercise-weight");
   const repsInput = card.querySelector(".exercise-reps");
   const noteInput = card.querySelector(".exercise-note");
 
+  entryIdInput.value = normalized.id;
+  entryStatusInput.value = normalized.status;
+  entryPlanInput.value = serializeWorkoutPhase(normalized.plan);
+  entryFactInput.value = serializeWorkoutPhase(normalized.fact);
   renderExercisePicker(select, normalized.exerciseId);
   setsInput.value = normalized.sets;
   weightInput.value = normalized.weight;
@@ -1695,38 +1724,76 @@ workoutForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const existingWorkout = getWorkouts().find((item) => item.id === workoutIdInput.value) ?? null;
+  const workoutStatus = workoutStatusInput.value;
+  let scheduledStartIso = "";
+  let scheduledEndIso = "";
+  let actualStartIso = "";
+  let actualEndIso = "";
+
+  if (workoutStatus === workoutStatuses.planned) {
+    scheduledStartIso = startTime.toISOString();
+    scheduledEndIso = endTime.toISOString();
+  } else if (workoutStatus === workoutStatuses.active) {
+    scheduledStartIso = startTime.toISOString();
+    scheduledEndIso = endTime.toISOString();
+    actualStartIso = existingWorkout?.actualStartTime || new Date().toISOString();
+  } else if (workoutStatus === workoutStatuses.completed) {
+    scheduledStartIso = existingWorkout?.scheduledStartTime ?? "";
+    scheduledEndIso = existingWorkout?.scheduledEndTime ?? "";
+    actualStartIso = startTime.toISOString();
+    actualEndIso = endTime.toISOString();
+  }
+
   const workout = {
     id: workoutIdInput.value || uid(),
     title: workoutTitleInput.value.trim(),
     type: workoutTypeInput.value,
-    status: workoutStatusInput.value,
-    startTime: startTime.toISOString(),
-    endTime: endTime.toISOString(),
-    scheduledStartTime: workoutStatusInput.value === workoutStatuses.planned ? startTime.toISOString() : "",
-    scheduledEndTime: workoutStatusInput.value === workoutStatuses.planned ? endTime.toISOString() : "",
-    actualStartTime: workoutStatusInput.value === workoutStatuses.completed ? startTime.toISOString() : "",
-    actualEndTime: workoutStatusInput.value === workoutStatuses.completed ? endTime.toISOString() : "",
-    createdAt: getWorkouts().find((item) => item.id === workoutIdInput.value)?.createdAt ?? new Date().toISOString(),
+    status: workoutStatus,
+    startTime: actualStartIso || scheduledStartIso || startTime.toISOString(),
+    endTime: actualEndIso || scheduledEndIso || endTime.toISOString(),
+    scheduledStartTime: scheduledStartIso,
+    scheduledEndTime: scheduledEndIso,
+    actualStartTime: actualStartIso,
+    actualEndTime: actualEndIso,
+    createdAt: existingWorkout?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    exercises: entries.map((entry) => ({
-      id: uid(),
-      exerciseId: entry.exerciseId,
-      status: workoutStatusInput.value === workoutStatuses.completed ? "done" : "pending",
-      plan: {
+    exercises: entries.map((entry) => {
+      const phase = {
         sets: entry.sets === "" ? null : Number(entry.sets),
         weight: entry.weight === "" ? null : Number(entry.weight),
         reps: entry.reps === "" ? null : Number(entry.reps),
         note: entry.note,
-      },
-      fact: workoutStatusInput.value === workoutStatuses.completed
-        ? {
-            sets: entry.sets === "" ? null : Number(entry.sets),
-            weight: entry.weight === "" ? null : Number(entry.weight),
-            reps: entry.reps === "" ? null : Number(entry.reps),
-            note: entry.note,
-          }
-        : null,
-    })),
+      };
+
+      if (workoutStatus === workoutStatuses.completed) {
+        return {
+          id: entry.entryId || uid(),
+          exerciseId: entry.exerciseId,
+          status: "done",
+          plan: entry.originalPlan ?? phase,
+          fact: phase,
+        };
+      }
+
+      if (workoutStatus === workoutStatuses.active && entry.entryStatus === "done") {
+        return {
+          id: entry.entryId || uid(),
+          exerciseId: entry.exerciseId,
+          status: "done",
+          plan: entry.originalPlan ?? phase,
+          fact: phase,
+        };
+      }
+
+      return {
+        id: entry.entryId || uid(),
+        exerciseId: entry.exerciseId,
+        status: "pending",
+        plan: phase,
+        fact: null,
+      };
+    }),
   };
 
   const workouts = getWorkouts();
