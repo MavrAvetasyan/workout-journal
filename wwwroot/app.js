@@ -878,6 +878,8 @@ function renderActiveWorkoutCard(workout) {
     return;
   }
 
+  const pendingCount = workout.exercises.filter((entry) => entry.status !== "done").length;
+  const doneCount = workout.exercises.filter((entry) => entry.status === "done").length;
   const entries = workout.exercises.filter((entry) => {
     if (activeWorkoutExerciseFilter === "done") return entry.status === "done";
     if (activeWorkoutExerciseFilter === "pending") return entry.status !== "done";
@@ -887,12 +889,17 @@ function renderActiveWorkoutCard(workout) {
   activeWorkoutCard.hidden = false;
   activeWorkoutCard.innerHTML = `
     <div class="active-workout-top">
-      <div>
+      <div class="active-workout-copy">
         <p class="section-kicker">Активная тренировка</p>
         <h3>${escapeHtml(workoutListTitle(workout))}</h3>
         <p class="history-meta">${escapeHtml(workoutDateMeta(workout))}</p>
       </div>
-      <span class="pill">${workoutStatusLabel(workout.status)}</span>
+      <button class="mini-icon-button active-card-edit" type="button" aria-label="Редактировать план">✎</button>
+    </div>
+    <div class="active-workout-statusbar">
+      <span class="tiny-pill tiny-pill-success">${workoutStatusLabel(workout.status)}</span>
+      <span class="tiny-pill">${pendingCount} осталось</span>
+      <span class="tiny-pill">${doneCount} сделано</span>
     </div>
     <div class="workout-filter-row compact">
       <button class="filter-chip ${activeWorkoutExerciseFilter === "pending" ? "is-active" : ""}" type="button" data-active-filter="pending">Запланированные</button>
@@ -900,20 +907,20 @@ function renderActiveWorkoutCard(workout) {
     </div>
     <div class="active-exercise-list">
       ${entries.length ? entries.map((entry) => `
-        <article class="active-exercise-item">
-          <div>
+        <article class="active-exercise-item ${entry.status === "done" ? "is-done" : ""}">
+          <div class="active-exercise-copy">
             <h4>${escapeHtml(getExerciseById(entry.exerciseId)?.name || "Упражнение")}</h4>
             <p>${escapeHtml(workoutExerciseSummary(entry))}</p>
           </div>
-          <button class="${entry.status === "done" ? "ghost-button" : "secondary-button"} active-exercise-toggle" type="button" data-entry-id="${entry.id}">
-            ${entry.status === "done" ? "Вернуть" : "Готово"}
+          <button class="active-exercise-toggle ${entry.status === "done" ? "is-done" : ""}" type="button" data-entry-id="${entry.id}" aria-label="${entry.status === "done" ? "Вернуть в запланированные" : "Отметить как выполненное"}">
+            ${entry.status === "done" ? "✓" : "Готово"}
           </button>
         </article>
       `).join("") : `<p class="helper-text">В этом фильтре пока нет упражнений.</p>`}
     </div>
-    <div class="history-card-actions">
-      <button class="secondary-button" type="button" data-active-complete="${workout.id}">Завершить тренировку</button>
-      <button class="ghost-button" type="button" data-active-edit="${workout.id}">Редактировать план</button>
+    <div class="active-workout-actions">
+      <button class="primary-button active-primary-action" type="button" data-active-complete="${workout.id}">Завершить тренировку</button>
+      <button class="ghost-button active-secondary-action" type="button" data-active-edit="${workout.id}">Изменить план</button>
     </div>
   `;
 
@@ -929,7 +936,7 @@ function renderActiveWorkoutCard(workout) {
   });
 
   activeWorkoutCard.querySelector("[data-active-complete]")?.addEventListener("click", () => completeWorkout(workout.id));
-  activeWorkoutCard.querySelector("[data-active-edit]")?.addEventListener("click", () => {
+  const openEdit = () => {
     fillWorkoutForm({
       ...workout,
       scheduledStartTime: workout.scheduledStartTime ? toLocalInputValue(new Date(workout.scheduledStartTime)) : "",
@@ -938,7 +945,10 @@ function renderActiveWorkoutCard(workout) {
       actualEndTime: workout.actualEndTime ? toLocalInputValue(new Date(workout.actualEndTime)) : "",
     }, { editing: true });
     openFormView("workouts");
-  });
+  };
+
+  activeWorkoutCard.querySelector(".active-card-edit")?.addEventListener("click", openEdit);
+  activeWorkoutCard.querySelector("[data-active-edit]")?.addEventListener("click", openEdit);
 }
 
 function renderWorkoutHistory() {
