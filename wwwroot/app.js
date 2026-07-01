@@ -920,7 +920,6 @@ function renderActiveWorkoutCard(workout) {
     </div>
     <div class="active-workout-actions">
       <button class="primary-button active-primary-action" type="button" data-active-complete="${workout.id}">Завершить тренировку</button>
-      <button class="ghost-button active-secondary-action" type="button" data-active-edit="${workout.id}">Изменить план</button>
     </div>
   `;
 
@@ -948,7 +947,6 @@ function renderActiveWorkoutCard(workout) {
   };
 
   activeWorkoutCard.querySelector(".active-card-edit")?.addEventListener("click", openEdit);
-  activeWorkoutCard.querySelector("[data-active-edit]")?.addEventListener("click", openEdit);
 }
 
 function renderWorkoutHistory() {
@@ -967,7 +965,9 @@ function renderWorkoutHistory() {
 
   renderActiveWorkoutCard(activeWorkout);
   workoutHistoryList.innerHTML = "";
-  workoutHistoryCount.textContent = `${filteredWorkouts.length} ${pluralize(filteredWorkouts.length, "запись", "записи", "записей")}`;
+  workoutHistoryCount.textContent = activeWorkout
+    ? `${filteredWorkouts.length} в списке`
+    : `${filteredWorkouts.length} ${pluralize(filteredWorkouts.length, "запись", "записи", "записей")}`;
   workoutEmptyState.hidden = filteredWorkouts.length > 0 || Boolean(activeWorkout);
   plannedFilterButton?.classList.toggle("is-active", workoutListFilter === "planned");
   completedFilterButton?.classList.toggle("is-active", workoutListFilter === "completed");
@@ -1368,8 +1368,7 @@ function queueServerSync() {
   serverSyncTimer = window.setTimeout(() => {
     pushServerData().catch((error) => {
       console.error(error);
-      updateSyncStatus("Не удалось синхронизировать изменения. Попробуй ещё раз.");
-      showToast("Не удалось синхронизировать изменения с сервером.");
+      updateSyncStatus("Сервер временно недоступен. Данные остались на этом устройстве и синхронизируются позже.");
     });
   }, 500);
 }

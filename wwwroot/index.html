@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Журнал тренировок</title>
-  <link rel="stylesheet" href="./styles.css?v=20260701a">
+  <link rel="stylesheet" href="./styles.css?v=20260701b">
 </head>
 <body>
   <div class="page-glow page-glow-left"></div>
@@ -289,37 +289,42 @@
                 </label>
               </div>
 
-              <div class="double-grid">
-                <label class="field">
-                  <span>Грудь</span>
-                  <input id="measurement-chest" type="number" min="0" step="0.1" placeholder="100">
-                </label>
-                <label class="field">
-                  <span>Талия</span>
-                  <input id="measurement-waist" type="number" min="0" step="0.1" placeholder="82">
-                </label>
-                <label class="field">
-                  <span>Живот</span>
-                  <input id="measurement-belly" type="number" min="0" step="0.1" placeholder="86">
-                </label>
-                <label class="field">
-                  <span>Бедра</span>
-                  <input id="measurement-hips" type="number" min="0" step="0.1" placeholder="98">
-                </label>
-                <label class="field">
-                  <span>Рука</span>
-                  <input id="measurement-arm" type="number" min="0" step="0.1" placeholder="36">
-                </label>
-                <label class="field">
-                  <span>Нога</span>
-                  <input id="measurement-leg" type="number" min="0" step="0.1" placeholder="58">
-                </label>
-              </div>
+              <details class="compact-details">
+                <summary>Обхваты и заметка</summary>
+                <div class="compact-details-body">
+                  <div class="double-grid">
+                    <label class="field">
+                      <span>Грудь</span>
+                      <input id="measurement-chest" type="number" min="0" step="0.1" placeholder="100">
+                    </label>
+                    <label class="field">
+                      <span>Талия</span>
+                      <input id="measurement-waist" type="number" min="0" step="0.1" placeholder="82">
+                    </label>
+                    <label class="field">
+                      <span>Живот</span>
+                      <input id="measurement-belly" type="number" min="0" step="0.1" placeholder="86">
+                    </label>
+                    <label class="field">
+                      <span>Бедра</span>
+                      <input id="measurement-hips" type="number" min="0" step="0.1" placeholder="98">
+                    </label>
+                    <label class="field">
+                      <span>Рука</span>
+                      <input id="measurement-arm" type="number" min="0" step="0.1" placeholder="36">
+                    </label>
+                    <label class="field">
+                      <span>Нога</span>
+                      <input id="measurement-leg" type="number" min="0" step="0.1" placeholder="58">
+                    </label>
+                  </div>
 
-              <label class="field">
-                <span>Заметка</span>
-                <textarea id="measurement-note" rows="4" placeholder="Например, утром натощак"></textarea>
-              </label>
+                  <label class="field">
+                    <span>Заметка</span>
+                    <textarea id="measurement-note" rows="4" placeholder="Например, утром натощак"></textarea>
+                  </label>
+                </div>
+              </details>
 
               <div class="form-actions">
                 <button id="reset-measurement-button" class="ghost-button" type="button">Очистить</button>
@@ -347,32 +352,23 @@
               <h3>Аккаунт</h3>
               <p id="account-email">Не выполнен вход.</p>
               <p id="sync-status-text">После входа приложение загружает данные с сервера и автоматически отправляет изменения обратно.</p>
+              <button id="logout-button" class="ghost-button" type="button">Выйти</button>
             </article>
 
             <article class="info-card">
-              <h3>Как сейчас хранятся данные</h3>
-              <p>Тренировки, упражнения, замеры и черновики сохраняются локально в браузере на этом устройстве.</p>
-            </article>
-
-            <article class="info-card">
-              <h3>Что уже поддерживается</h3>
-              <p>Черновики форм восстанавливаются. Для тренировок можно создавать упражнения прямо из текущего сценария.</p>
-            </article>
-
-            <article class="info-card">
-              <h3>Резервная копия</h3>
-              <p>Можно выгрузить все данные в файл и позже восстановить их через импорт.</p>
-            </article>
-
-            <article class="info-card">
-              <h3>Действия с данными</h3>
+              <h3>Данные</h3>
+              <p>Экспортируй журнал в файл или верни его обратно через импорт.</p>
               <div class="info-card-actions">
                 <button id="export-data-button" class="secondary-button" type="button">Экспорт данных</button>
                 <button id="import-data-button" class="secondary-button" type="button">Импорт данных</button>
-                <button id="clear-all-data-button" class="ghost-button" type="button">Очистить все данные</button>
               </div>
               <input id="import-data-input" type="file" accept="application/json" hidden>
-              <p>Очистка затрагивает только это устройство.</p>
+            </article>
+
+            <article class="info-card">
+              <h3>Локальное хранение</h3>
+              <p>Черновики форм и история остаются в браузере на этом устройстве. Очистка затронет только его.</p>
+              <button id="clear-all-data-button" class="ghost-button" type="button">Очистить все данные</button>
             </article>
           </section>
         </div>
@@ -438,6 +434,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=20260701a" defer></script>
+  <script src="./app.js?v=20260701b" defer></script>
 </body>
 </html>
